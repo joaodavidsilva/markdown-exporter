@@ -119,7 +119,7 @@
     "vscode:prepublish": "npm run compile",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
-    "test": "node ./test/runTest.js"
+    "test": "npm run compile && node --test \"out/test/**/*.test.js\""
   },
   "devDependencies": {
     "@types/node": "16.x",
