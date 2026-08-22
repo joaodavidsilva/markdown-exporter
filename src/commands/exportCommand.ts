@@ -1,11 +1,12 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import { access, rm } from 'node:fs/promises';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { getConfiguration } from '../config/settings';
-import { expandSelection, ExpansionEntry } from '../core/expansion';
-import { buildMarkdown } from '../core/markdownBuilder';
 import { getWorkspaceRoot } from '../adapter/paths';
 import { getSelectionPaths } from '../adapter/selection';
+import { getConfiguration } from '../config/settings';
+import { openFileDestination } from '../core/destinations';
+import { createExport } from '../core/export';
+import { expandSelection, ExpansionEntry } from '../core/expansion';
 
 function generateTimestamp(): string {
     const now = new Date();
@@ -29,12 +30,12 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
     try {
         // Build timestamped output file name
         const config = getConfiguration();
-    const rawBase = path.basename(config.outputFile).trim();
-    const baseName = rawBase.length === 0 ? 'export.md' : rawBase;
+        const rawBase = path.basename(config.outputFile).trim();
+        const baseName = rawBase.length === 0 ? 'export.md' : rawBase;
         const ext = path.extname(baseName);
-    const nameOnly = ext ? baseName.slice(0, baseName.length - ext.length) : baseName;
+        const nameOnly = ext ? baseName.slice(0, baseName.length - ext.length) : baseName;
         const stampedName = `${nameOnly}_${generateTimestamp()}${ext}`;
-    const stampedPath = path.join(workspaceRoot, stampedName);
+        const stampedPath = path.join(workspaceRoot, stampedName);
 
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
@@ -58,8 +59,17 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
 
             progress.report({ increment: 50, message: 'Building markdown...' });
             try {
-                await buildMarkdown(entries.map(entry => entry.absolutePath), workspaceRoot, config, stampedName);
+                const destination = await openFileDestination(stampedPath);
+                try {
+                    await createExport({ entries, configuration: config, destination });
+                } finally {
+                    await destination.close();
+                }
             } catch (mdErr) {
+                // The Destination writes through, so a failure can leave a
+                // partial Export behind. Remove it rather than hand back half
+                // a document.
+                await rm(stampedPath, { force: true });
                 const msg = mdErr instanceof Error ? mdErr.message : String(mdErr);
                 void vscode.window.showErrorMessage(`Markdown Exporter: Failed building markdown (${msg})`);
                 return;
@@ -67,7 +77,7 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
             progress.report({ increment: 100, message: 'Done!' });
         });
         // Verify file existence (defensive)
-        if (!fs.existsSync(stampedPath)) {
+        if (!(await exists(stampedPath))) {
             void vscode.window.showErrorMessage(`Markdown Exporter: Expected output not found (${stampedPath})`);
         } else {
             void vscode.window.showInformationMessage(`Markdown Exporter: Export completed successfully (${stampedPath})`);
@@ -75,5 +85,14 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         void vscode.window.showErrorMessage(`Markdown Exporter: Export failed (${message})`);
+    }
+}
+
+async function exists(absolutePath: string): Promise<boolean> {
+    try {
+        await access(absolutePath);
+        return true;
+    } catch {
+        return false;
     }
 }
