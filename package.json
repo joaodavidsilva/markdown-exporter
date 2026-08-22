@@ -118,7 +118,7 @@
     "compile": "tsc -p ./",
     "vscode:prepublish": "npm run compile",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts",
+    "lint": "eslint src --ext ts --max-warnings 0",
     "test": "npm run compile && node --test \"out/test/**/*.test.js\""
   },
   "devDependencies": {

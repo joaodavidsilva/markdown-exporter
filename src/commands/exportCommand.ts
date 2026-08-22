@@ -17,13 +17,13 @@ function generateTimestamp(): string {
 export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Uri[] | undefined): Promise<void> {
     const workspaceRoot = getWorkspaceRoot();
     if (!workspaceRoot) {
-        vscode.window.showErrorMessage('Markdown Exporter: No workspace folder found');
+        void vscode.window.showErrorMessage('Markdown Exporter: No workspace folder found');
         return;
     }
 
     const selectionPaths = getSelectionPaths(uri, uris, workspaceRoot);
     if (selectionPaths.length === 0) {
-        vscode.window.showWarningMessage('Markdown Exporter: No files or folders selected');
+        void vscode.window.showWarningMessage('Markdown Exporter: No files or folders selected');
         return;
     }
 
@@ -50,7 +50,7 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
                 allFiles = walkFiles(selectionPaths, workspaceRoot);
             } catch (walkErr) {
                 const msg = walkErr instanceof Error ? walkErr.message : String(walkErr);
-                vscode.window.showErrorMessage(`Markdown Exporter: Failed scanning files (${msg})`);
+                void vscode.window.showErrorMessage(`Markdown Exporter: Failed scanning files (${msg})`);
                 return;
             }
 
@@ -59,19 +59,19 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
                 await buildMarkdown(allFiles, workspaceRoot, stampedName);
             } catch (mdErr) {
                 const msg = mdErr instanceof Error ? mdErr.message : String(mdErr);
-                vscode.window.showErrorMessage(`Markdown Exporter: Failed building markdown (${msg})`);
+                void vscode.window.showErrorMessage(`Markdown Exporter: Failed building markdown (${msg})`);
                 return;
             }
             progress.report({ increment: 100, message: 'Done!' });
         });
         // Verify file existence (defensive)
         if (!fs.existsSync(stampedPath)) {
-            vscode.window.showErrorMessage(`Markdown Exporter: Expected output not found (${stampedPath})`);
+            void vscode.window.showErrorMessage(`Markdown Exporter: Expected output not found (${stampedPath})`);
         } else {
-            vscode.window.showInformationMessage(`Markdown Exporter: Export completed successfully (${stampedPath})`);
+            void vscode.window.showInformationMessage(`Markdown Exporter: Export completed successfully (${stampedPath})`);
         }
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Markdown Exporter: Export failed (${message})`);
+        void vscode.window.showErrorMessage(`Markdown Exporter: Export failed (${message})`);
     }
 }

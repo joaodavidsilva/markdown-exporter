@@ -10,18 +10,58 @@
   ],
   "extends": [
     "eslint:recommended",
-    "plugin:@typescript-eslint/eslint-recommended"
+    "plugin:@typescript-eslint/eslint-recommended",
+    "plugin:@typescript-eslint/recommended"
   ],
   "parserOptions": {
     "ecmaVersion": 2020,
-    "sourceType": "module"
+    "sourceType": "module",
+    // Type-aware rules need the program. Every linted file lives under src,
+    // which this tsconfig covers.
+    "project": "./tsconfig.json"
   },
   "rules": {
     "no-console": "off",
 
-    // The base rule cannot read TypeScript: it reports the parameter names
-    // inside a function-type annotation as unused variables.
+    // Correctness. The v2.0 core becomes an asynchronous streaming pipeline,
+    // so a dropped promise is the defect class most worth catching early.
+    "@typescript-eslint/no-floating-promises": "error",
+    "@typescript-eslint/no-misused-promises": "error",
+    "@typescript-eslint/await-thenable": "error",
+    "no-throw-literal": "off",
+    "@typescript-eslint/no-throw-literal": "error",
+    "no-return-await": "off",
+    "@typescript-eslint/return-await": ["error", "in-try-catch"],
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "no-implicit-coercion": "error",
+
+    // Dead code. Caught errors count too: a binding that is never read hides
+    // the reason an export failed. Prefix with _ to say the miss is deliberate.
     "no-unused-vars": "off",
-    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
-  }
+    "@typescript-eslint/no-unused-vars": ["error", {
+      "argsIgnorePattern": "^_",
+      "varsIgnorePattern": "^_",
+      "caughtErrors": "all",
+      "caughtErrorsIgnorePattern": "^_"
+    }],
+
+    // Consistency.
+    "curly": ["error", "all"],
+    "no-var": "error",
+    "prefer-const": "error",
+    "@typescript-eslint/consistent-type-definitions": ["error", "interface"]
+  },
+  "overrides": [
+    {
+      "files": ["src/test/**/*.ts"],
+      "rules": {
+        // node:test's top-level test() returns a promise the runner owns, so
+        // every test case would report as a floating promise. The option that
+        // states this precisely, allowForKnownSafeCalls, needs
+        // typescript-eslint v8; this project is on v6 for ESLint 8. Every
+        // other rule still applies to the test sources.
+        "@typescript-eslint/no-floating-promises": "off"
+      }
+    }
+  ]
 }

@@ -30,7 +30,7 @@ export async function buildMarkdown(files: string[], workspaceRoot: string, outp
                 const ext = path.extname(file).toLowerCase().slice(1);
                 const lang = getLanguageFromExtension(ext);
                 markdown += `\`\`\`${lang}\n${content}\n\`\`\`\n\n`;
-            } catch (error) {
+            } catch {
                 markdown += 'Error reading file content.\n\n';
             }
         }
