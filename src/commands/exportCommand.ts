@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { getConfiguration } from '../config/settings';
-import { walkFiles } from '../core/fileWalker';
+import { expandSelection, ExpansionEntry } from '../core/expansion';
 import { buildMarkdown } from '../core/markdownBuilder';
 import { getWorkspaceRoot } from '../adapter/paths';
 import { getSelectionPaths } from '../adapter/selection';
@@ -42,9 +42,14 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
             cancellable: false
         }, async (progress) => {
             progress.report({ increment: 0, message: 'Scanning files...' });
-            let allFiles: string[] = [];
+            let entries: ExpansionEntry[] = [];
             try {
-                allFiles = walkFiles(selectionPaths, workspaceRoot, config, stampedName);
+                entries = await expandSelection({
+                    selectionPaths,
+                    workspaceRoot,
+                    configuration: config,
+                    exportFileName: stampedName
+                });
             } catch (walkErr) {
                 const msg = walkErr instanceof Error ? walkErr.message : String(walkErr);
                 void vscode.window.showErrorMessage(`Markdown Exporter: Failed scanning files (${msg})`);
@@ -53,7 +58,7 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
 
             progress.report({ increment: 50, message: 'Building markdown...' });
             try {
-                await buildMarkdown(allFiles, workspaceRoot, config, stampedName);
+                await buildMarkdown(entries.map(entry => entry.absolutePath), workspaceRoot, config, stampedName);
             } catch (mdErr) {
                 const msg = mdErr instanceof Error ? mdErr.message : String(mdErr);
                 void vscode.window.showErrorMessage(`Markdown Exporter: Failed building markdown (${msg})`);

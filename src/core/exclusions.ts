@@ -1,25 +1,26 @@
-import * as path from 'path';
+import * as path from 'node:path';
 import { isBinaryFile } from './binaryDetection';
 import { ResolvedConfiguration } from './configuration';
 import { createGitignoreFilter } from './gitignore';
 
 /**
- * Whether an Exclusion rule removes this path from the Expansion.
+ * Whether an Exclusion removes this path, so that it appears nowhere in the
+ * Export.
  *
  * The in-flight Export's own file travels in as `exportFileName` rather than
- * living in module state, so two Exports can run without colliding.
+ * living in module state, so an Export never contains a previous one and two
+ * Exports cannot collide.
  */
-export function shouldIgnoreFile(
+export async function isExcluded(
     filePath: string,
     workspaceRoot: string,
     configuration: ResolvedConfiguration,
     exportFileName?: string
-): boolean {
+): Promise<boolean> {
     const relativePath = path.relative(workspaceRoot, filePath);
 
-    const gitignoreFilter = createGitignoreFilter(workspaceRoot);
-
-    if (gitignoreFilter(filePath)) {
+    const isGitignored = await createGitignoreFilter(workspaceRoot);
+    if (isGitignored(filePath)) {
         return true;
     }
 
@@ -27,17 +28,12 @@ export function shouldIgnoreFile(
         return true;
     }
 
-    // Exclude the configured Destination (legacy, un-stamped) and the file this
-    // Export is writing to, so an Export never contains a previous one.
-    const configuredOutputPath = path.join(workspaceRoot, configuration.outputFile);
-    if (filePath === configuredOutputPath) {
+    if (filePath === path.join(workspaceRoot, configuration.outputFile)) {
         return true;
     }
-    if (exportFileName) {
-        const exportPath = path.join(workspaceRoot, exportFileName);
-        if (filePath === exportPath) {
-            return true;
-        }
+
+    if (exportFileName && filePath === path.join(workspaceRoot, exportFileName)) {
+        return true;
     }
 
     if (configuration.binaryFiles.includes(relativePath)) {
