@@ -5,8 +5,8 @@ import { getConfiguration } from '../config/settings';
 import { walkFiles } from '../core/fileWalker';
 import { setCurrentOutputFile } from '../core/ignores';
 import { buildMarkdown } from '../core/markdownBuilder';
-import { getWorkspaceRoot } from '../core/paths';
-import { getSelectionPaths } from '../core/selection';
+import { getWorkspaceRoot } from '../adapter/paths';
+import { getSelectionPaths } from '../adapter/selection';
 
 function generateTimestamp(): string {
     const now = new Date();
