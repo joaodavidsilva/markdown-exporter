@@ -1,18 +1,21 @@
 import * as path from 'path';
-import { getConfiguration } from '../config/settings';
 import { isBinaryFile } from './binaryDetection';
+import { ResolvedConfiguration } from './configuration';
 import { createGitignoreFilter } from './gitignore';
 
-// Track current run's output file (timestamped) so we can ignore EXACT file.
-let currentOutputFile: string | undefined; // relative path
-
-export function setCurrentOutputFile(relativeFileName: string) {
-    currentOutputFile = relativeFileName;
-}
-
-export function shouldIgnoreFile(filePath: string, workspaceRoot: string): boolean {
+/**
+ * Whether an Exclusion rule removes this path from the Expansion.
+ *
+ * The in-flight Export's own file travels in as `exportFileName` rather than
+ * living in module state, so two Exports can run without colliding.
+ */
+export function shouldIgnoreFile(
+    filePath: string,
+    workspaceRoot: string,
+    configuration: ResolvedConfiguration,
+    exportFileName?: string
+): boolean {
     const relativePath = path.relative(workspaceRoot, filePath);
-    const config = getConfiguration();
 
     const gitignoreFilter = createGitignoreFilter(workspaceRoot);
 
@@ -20,27 +23,28 @@ export function shouldIgnoreFile(filePath: string, workspaceRoot: string): boole
         return true;
     }
 
-    if (config.additionalIgnore.includes(relativePath)) {
+    if (configuration.additionalIgnore.includes(relativePath)) {
         return true;
     }
 
-    // Ignore base configured output file (legacy) and the current timestamped output file (if set)
-    const configuredOutputPath = path.join(workspaceRoot, config.outputFile);
+    // Exclude the configured Destination (legacy, un-stamped) and the file this
+    // Export is writing to, so an Export never contains a previous one.
+    const configuredOutputPath = path.join(workspaceRoot, configuration.outputFile);
     if (filePath === configuredOutputPath) {
         return true;
     }
-    if (currentOutputFile) {
-        const dynamicOutputPath = path.join(workspaceRoot, currentOutputFile);
-        if (filePath === dynamicOutputPath) {
+    if (exportFileName) {
+        const exportPath = path.join(workspaceRoot, exportFileName);
+        if (filePath === exportPath) {
             return true;
         }
     }
 
-    if (config.binaryFiles.includes(relativePath)) {
+    if (configuration.binaryFiles.includes(relativePath)) {
         return true;
     }
 
-    if (isBinaryFile(filePath, config.binaryFileExtensions)) {
+    if (isBinaryFile(filePath, configuration.binaryFileExtensions)) {
         return true;
     }
 

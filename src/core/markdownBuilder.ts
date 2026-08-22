@@ -1,10 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getConfiguration } from '../config/settings';
 import { isBinaryFile } from './binaryDetection';
+import { ResolvedConfiguration } from './configuration';
 
-export async function buildMarkdown(files: string[], workspaceRoot: string, outputFileName?: string): Promise<string> {
-    const config = getConfiguration();
+export async function buildMarkdown(
+    files: string[],
+    workspaceRoot: string,
+    config: ResolvedConfiguration,
+    outputFileName?: string
+): Promise<string> {
     const finalName = outputFileName || config.outputFile;
     const outputPath = path.join(workspaceRoot, finalName);
 

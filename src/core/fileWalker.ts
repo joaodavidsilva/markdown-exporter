@@ -1,8 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { ResolvedConfiguration } from './configuration';
 import { shouldIgnoreFile } from './ignores';
 
-export function walkFiles(inputPaths: string[], workspaceRoot: string): string[] {
+export function walkFiles(
+    inputPaths: string[],
+    workspaceRoot: string,
+    configuration: ResolvedConfiguration,
+    exportFileName?: string
+): string[] {
     const allFiles: string[] = [];
     
     for (const inputPath of inputPaths) {
@@ -11,20 +17,25 @@ export function walkFiles(inputPaths: string[], workspaceRoot: string): string[]
         }
         
         if (fs.statSync(inputPath).isFile()) {
-            if (!shouldIgnoreFile(inputPath, workspaceRoot)) {
+            if (!shouldIgnoreFile(inputPath, workspaceRoot, configuration, exportFileName)) {
                 allFiles.push(inputPath);
             }
             continue;
         }
         
-        const files = walkDirectory(inputPath, workspaceRoot);
+        const files = walkDirectory(inputPath, workspaceRoot, configuration, exportFileName);
         allFiles.push(...files);
     }
     
     return allFiles.sort();
 }
 
-function walkDirectory(dirPath: string, workspaceRoot: string): string[] {
+function walkDirectory(
+    dirPath: string,
+    workspaceRoot: string,
+    configuration: ResolvedConfiguration,
+    exportFileName?: string
+): string[] {
     const files: string[] = [];
     
     function traverse(currentPath: string) {
@@ -33,7 +44,7 @@ function walkDirectory(dirPath: string, workspaceRoot: string): string[] {
         for (const item of items) {
             const itemPath = path.join(currentPath, item);
             
-            if (shouldIgnoreFile(itemPath, workspaceRoot)) {
+            if (shouldIgnoreFile(itemPath, workspaceRoot, configuration, exportFileName)) {
                 continue;
             }
             

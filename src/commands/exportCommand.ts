@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { getConfiguration } from '../config/settings';
 import { walkFiles } from '../core/fileWalker';
-import { setCurrentOutputFile } from '../core/ignores';
 import { buildMarkdown } from '../core/markdownBuilder';
 import { getWorkspaceRoot } from '../adapter/paths';
 import { getSelectionPaths } from '../adapter/selection';
@@ -36,8 +35,6 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
     const nameOnly = ext ? baseName.slice(0, baseName.length - ext.length) : baseName;
         const stampedName = `${nameOnly}_${generateTimestamp()}${ext}`;
     const stampedPath = path.join(workspaceRoot, stampedName);
-    // Register this output file for ignore filtering in this run
-    setCurrentOutputFile(stampedName);
 
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
@@ -47,7 +44,7 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
             progress.report({ increment: 0, message: 'Scanning files...' });
             let allFiles: string[] = [];
             try {
-                allFiles = walkFiles(selectionPaths, workspaceRoot);
+                allFiles = walkFiles(selectionPaths, workspaceRoot, config, stampedName);
             } catch (walkErr) {
                 const msg = walkErr instanceof Error ? walkErr.message : String(walkErr);
                 void vscode.window.showErrorMessage(`Markdown Exporter: Failed scanning files (${msg})`);
@@ -56,7 +53,7 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
 
             progress.report({ increment: 50, message: 'Building markdown...' });
             try {
-                await buildMarkdown(allFiles, workspaceRoot, stampedName);
+                await buildMarkdown(allFiles, workspaceRoot, config, stampedName);
             } catch (mdErr) {
                 const msg = mdErr instanceof Error ? mdErr.message : String(mdErr);
                 void vscode.window.showErrorMessage(`Markdown Exporter: Failed building markdown (${msg})`);
