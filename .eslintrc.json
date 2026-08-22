@@ -65,6 +65,10 @@
           "paths": [{
             "name": "vscode",
             "message": "ADR-0001: nothing beneath the expandSelection / createExport seams may import the VS Code API. Read configuration at the adapter boundary and pass it in as a plain value."
+          }],
+          "patterns": [{
+            "group": ["**/adapter/**", "**/config/**"],
+            "message": "ADR-0001: the adapter depends on the core, never the other way round. This is how the editor API reached the walker's innermost loop before: the core imported the settings module, and the settings module imports vscode."
           }]
         }]
       }
