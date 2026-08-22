@@ -33,9 +33,6 @@ node_modules/**/example/
 node_modules/**/examples/
 node_modules/**/docs/
 
-# Nested legacy scaffold removed; keep ignoring in case recreated
-extension/
-
 # Do NOT ignore:
 # - out/
 # - out/**/*.js
