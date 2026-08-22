@@ -53,6 +53,23 @@
   },
   "overrides": [
     {
+      // ADR-0001: the core is independent of the VS Code API, so that the
+      // suite can exercise it over real temporary directories in seconds
+      // without launching an editor. A single import here would make the
+      // whole thing unrunnable, and the failure would look like a tooling
+      // problem rather than a design one. The tests live under the same rule
+      // because a test that needs the editor defeats the same purpose.
+      "files": ["src/core/**/*.ts", "src/test/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "paths": [{
+            "name": "vscode",
+            "message": "ADR-0001: nothing beneath the expandSelection / createExport seams may import the VS Code API. Read configuration at the adapter boundary and pass it in as a plain value."
+          }]
+        }]
+      }
+    },
+    {
       "files": ["src/test/**/*.ts"],
       "rules": {
         // node:test's top-level test() returns a promise the runner owns, so
