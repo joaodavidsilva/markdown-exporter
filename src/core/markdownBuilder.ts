@@ -13,7 +13,7 @@ export async function buildMarkdown(files: string[], workspaceRoot: string, outp
 
     for (const file of files) {
         const relativePath = path.relative(workspaceRoot, file);
-        markdown += `- [${relativePath}](#${relativePath.replace(/[\/\\\.]/g, '-')})\n`;
+        markdown += `- [${relativePath}](#${relativePath.replace(/[/\\.]/g, '-')})\n`;
     }
 
     markdown += '\n---\n\n';

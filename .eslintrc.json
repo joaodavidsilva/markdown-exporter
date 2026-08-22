@@ -2,17 +2,26 @@
   "root": true,
   "env": {
     "node": true,
-    "es6": true
+    "es2020": true
   },
+  "parser": "@typescript-eslint/parser",
+  "plugins": [
+    "@typescript-eslint"
+  ],
   "extends": [
-    "eslint:recommended"
+    "eslint:recommended",
+    "plugin:@typescript-eslint/eslint-recommended"
   ],
   "parserOptions": {
-    "ecmaVersion": 2018,
+    "ecmaVersion": 2020,
     "sourceType": "module"
   },
   "rules": {
     "no-console": "off",
-    "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
+
+    // The base rule cannot read TypeScript: it reports the parameter names
+    // inside a function-type annotation as unused variables.
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
   }
 }
