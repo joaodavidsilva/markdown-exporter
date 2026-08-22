@@ -10,9 +10,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:markdownExport.export"
-  ],
   "main": "./out/index.js",
   "contributes": {
     "commands": [
