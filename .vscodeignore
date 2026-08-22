@@ -1,0 +1,46 @@
+# Ignore source files (TS)
+src/
+
+# Ignore test files
+test/
+out/test/
+
+# Ignore maps (optional)
+*.map
+
+# Ignore unneeded VS Code metadata
+.vscode/
+.vscode-test/
+.vscode-test-web/
+
+# Ignore dev junk
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.eslintcache
+.stylelintcache
+
+# Ignore OS junk
+.DS_Store
+
+# Keep production dependencies (don't exclude node_modules entirely). Remove dev-only large folders if needed:
+node_modules/**/README.md
+node_modules/**/test/
+node_modules/**/tests/
+node_modules/**/__tests__/
+node_modules/**/example/
+node_modules/**/examples/
+node_modules/**/docs/
+
+# Nested legacy scaffold removed; keep ignoring in case recreated
+extension/
+
+# Do NOT ignore:
+# - out/
+# - out/**/*.js
+# - out/**/*.js.map
+# - package.json
+# - README.md
+# - LICENSE
+# - Any runtime file
