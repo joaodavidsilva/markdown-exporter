@@ -241,7 +241,7 @@ async function collectLink(linkPath: string, walk: Walk): Promise<void> {
  * file too large to embed is too large to sniff; the content sniff comes last,
  * and it is the one that catches the extensions nobody listed.
  */
-function createClassifier(
+export function createClassifier(
     workspaceRoot: string,
     configuration: ResolvedConfiguration
 ): (candidate: Candidate) => Promise<ExpansionEntry> {
