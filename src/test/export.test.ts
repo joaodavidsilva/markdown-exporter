@@ -139,6 +139,41 @@ test('a Stub stands in the tree with the reason its content is absent', async ()
             '│   └── debug.log  (omitted: too large)',
             '└── secret.txt  (omitted: unreadable)'
         ].join('\n'));
+
+        // A Stub has no content and so nothing to count. The slot a token
+        // count would sit in is the same one its reason already fills, and
+        // the two never appear together on one line.
+        assert.equal(/omitted:[^\n]*tokens/.test(markdown), false);
+        assert.equal(/tokens\)[^\n]*omitted:/.test(markdown), false);
+    });
+});
+
+test('an embedded file too small to have content is still annotated, at zero rather than omitted', async () => {
+    await withWorkspace({ 'empty.ts': '' }, async root => {
+        const markdown = await renderToText([embedded(root, 'empty.ts')]);
+
+        // Zero tokens is still a fact about the file, not an absence of one —
+        // an empty file is embedded, not a Stub, so it earns a count like any
+        // other embedded file rather than the Stub vocabulary.
+        assert.equal(treeOf(markdown), '.\n└── empty.ts  (~0 tokens)');
+    });
+});
+
+test('unicode content is counted by the real vocabulary, not a character heuristic', async () => {
+    // Portuguese, an em dash, an emoji and CJK together: the kind of mixed
+    // content a character-per-token heuristic gets wrong in more than one
+    // direction at once. The expected count comes from the same o200k_base
+    // vocabulary the implementation uses, so this asserts the real tokenizer
+    // ran rather than asserting a coincidence.
+    const content = 'ação — ✅ 世界 🌍\n'.repeat(50);
+
+    await withWorkspace({ 'unicode.md': content }, async root => {
+        const markdown = await renderToText([embedded(root, 'unicode.md')]);
+
+        assert.equal(treeOf(markdown), '.\n└── unicode.md  (~350 tokens)');
+        // A characters/4 heuristic would have guessed a very different
+        // number here (187): the multi-byte content is what tells them apart.
+        assert.notEqual(350, Math.round(content.length / 4));
     });
 });
 
@@ -512,6 +547,53 @@ test('the statistics report what the Export contained', async () => {
         assert.equal(statistics.embedCount, 2);
         assert.equal(statistics.stubCount, 1);
         assert.equal(statistics.characterCount, destination.text().length);
+        // The total is the whole Export's, scaffolding included — the tree,
+        // the headings, the fences — not only the two files' content, which
+        // is why this is well past the 4 tokens 'one\n' and 'two\n' alone
+        // would cost. The Stub contributes a notice but no file content.
+        assert.equal(statistics.tokenCount, 117);
+        assert.equal(statistics.tokenThresholdExceeded, false);
+    });
+});
+
+test('an Export past the configured token threshold is reported as exceeding it', async () => {
+    await withWorkspace({ 'a.ts': 'one\n' }, async root => {
+        const statistics = await createExport({
+            entries: [embedded(root, 'a.ts')],
+            configuration: resolvedConfiguration({ tokenWarningThreshold: 1 }),
+            destination: createBufferedDestination()
+        });
+
+        // The whole Export — tree, heading and fence included, not just the
+        // four characters of 'one\n' — comes to 60 tokens here, past a
+        // threshold of 1.
+        assert.equal(statistics.tokenCount, 60);
+        assert.equal(statistics.tokenThresholdExceeded, true);
+    });
+});
+
+test('an Export at or under the configured token threshold is not reported as exceeding it', async () => {
+    await withWorkspace({ 'a.ts': 'one\n' }, async root => {
+        const statistics = await createExport({
+            entries: [embedded(root, 'a.ts')],
+            configuration: resolvedConfiguration({ tokenWarningThreshold: 1000 }),
+            destination: createBufferedDestination()
+        });
+
+        assert.equal(statistics.tokenThresholdExceeded, false);
+    });
+});
+
+test('a token threshold of zero means the Export never warns, however large', async () => {
+    await withWorkspace({ 'a.ts': 'one\n'.repeat(5000) }, async root => {
+        const statistics = await createExport({
+            entries: [embedded(root, 'a.ts')],
+            configuration: resolvedConfiguration({ tokenWarningThreshold: 0 }),
+            destination: createBufferedDestination()
+        });
+
+        assert.equal(statistics.tokenCount > 0, true);
+        assert.equal(statistics.tokenThresholdExceeded, false);
     });
 });
 
