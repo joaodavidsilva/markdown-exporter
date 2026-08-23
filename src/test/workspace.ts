@@ -84,11 +84,12 @@ export function resolvedConfiguration(
 }
 
 /**
- * The files on disk that supply Exclusion rules. `.exportignore` and nested
- * `.gitignore` files join this list later; counting by name keeps the helper
- * honest when they do.
+ * The files on disk that supply Exclusion rules — every `.gitignore` in the
+ * tree, nested ones included, and the `.exportignore` at the workspace root.
+ * Counting by name rather than by path is what keeps the helper honest as
+ * sources are added.
  */
-const exclusionSourceNames = new Set(['.gitignore']);
+const exclusionSourceNames = new Set(['.gitignore', '.exportignore']);
 
 /**
  * Count real reads of the Exclusion sources while `run` executes.

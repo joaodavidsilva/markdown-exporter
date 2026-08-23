@@ -200,6 +200,95 @@ test('a nested .gitignore inside a directory the root excluded is never reached'
     });
 });
 
+test('an .exportignore at the workspace root excludes a file', async () => {
+    await withWorkspace({
+        '.exportignore': 'notes.md\n',
+        'notes.md': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.equal(relativePaths(entries).includes('notes.md'), false);
+        assert.equal(relativePaths(entries).includes(path.join('src', 'index.ts')), true);
+    });
+});
+
+test('an .exportignore is written in the same syntax as a .gitignore', async () => {
+    await withWorkspace({
+        '.exportignore': '**/*.snap\nout/\n',
+        'src/deep/component.snap': '',
+        'out/bundle.js': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(relativePaths(entries), ['.exportignore', path.join('src', 'index.ts')]);
+    });
+});
+
+test('an .exportignore excludes a file the .gitignore kept', async () => {
+    await withWorkspace({
+        '.gitignore': '*.log\n',
+        '.exportignore': 'secrets.txt\n',
+        'secrets.txt': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.equal(relativePaths(entries).includes('secrets.txt'), false);
+    });
+});
+
+test('an .exportignore takes precedence over a .gitignore that excluded a file', async () => {
+    await withWorkspace({
+        '.gitignore': '*.log\n',
+        '.exportignore': '!debug.log\n',
+        'debug.log': '',
+        'other.log': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        const paths = relativePaths(entries);
+        assert.equal(paths.includes('debug.log'), true);
+        assert.equal(paths.includes('other.log'), false);
+    });
+});
+
+test('an .exportignore takes precedence over a nested .gitignore too', async () => {
+    await withWorkspace({
+        'src/.gitignore': '*.log\n',
+        '.exportignore': '!src/keep.log\n',
+        'src/keep.log': '',
+        'src/drop.log': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        const paths = relativePaths(entries);
+        assert.equal(paths.includes(path.join('src', 'keep.log')), true);
+        assert.equal(paths.includes(path.join('src', 'drop.log')), false);
+    });
+});
+
 test('a file listed in additionalIgnore is excluded from the Expansion', async () => {
     await withWorkspace({ 'notes.md': '', 'src/index.ts': '' }, async root => {
         const entries = await expandSelection({
@@ -325,7 +414,11 @@ test('.git is not walked at all, not merely filtered out of the entries', async 
 });
 
 test('the Exclusion sources are read once per Export, not once per file', async () => {
-    const files: Record<string, string> = { '.gitignore': '*.log\n' };
+    const files: Record<string, string> = {
+        '.gitignore': '*.log\n',
+        '.exportignore': '*.snap\n',
+        'src/module-0/.gitignore': '*.tmp\n'
+    };
     for (let index = 0; index < 250; index += 1) {
         files[`src/module-${index % 25}/file-${index}.ts`] = `export const v = ${index};\n`;
     }
@@ -347,9 +440,14 @@ test('the Exclusion sources are read once per Export, not once per file', async 
         });
 
         // The tree is large enough that a read per file visited would be
-        // unmistakable: 251 files across 25 directories.
-        assert.equal(result.length, 251);
-        assert.equal(reads, 1);
+        // unmistakable: 253 files across 26 directories.
+        assert.equal(result.length, 253);
+
+        // Three sources exist on disk, and each is read exactly once. The 24
+        // directories with no `.gitignore` of their own cost no read at all,
+        // because the walk already has their listings and knows there is
+        // nothing there to read.
+        assert.equal(reads, 3);
     });
 });
 
