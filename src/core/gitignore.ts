@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { IgnoreRules, IgnoreVerdict, readIgnoreRules } from './ignoreRules';
+import { IgnoreRules, IgnoreVerdict, leavesDirectory, readIgnoreRules } from './ignoreRules';
 
 const gitignoreName = '.gitignore';
 
@@ -35,7 +35,7 @@ export function createGitignoreChain(workspaceRoot: string): GitignoreChain {
     /** The workspace root, then each directory down to this one. */
     const chainTo = (directoryPath: string): string[] => {
         const relative = path.relative(workspaceRoot, directoryPath);
-        if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        if (leavesDirectory(relative)) {
             return [];
         }
 
@@ -68,7 +68,7 @@ export function createGitignoreChain(workspaceRoot: string): GitignoreChain {
 
         decide(absolutePath: string): IgnoreVerdict | undefined {
             const relative = path.relative(workspaceRoot, absolutePath);
-            if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+            if (relative === '' || leavesDirectory(relative)) {
                 return undefined;
             }
 

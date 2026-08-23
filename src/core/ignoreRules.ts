@@ -27,9 +27,19 @@ function toPosix(relativePath: string): string {
     return path.sep === '/' ? relativePath : relativePath.split(path.sep).join('/');
 }
 
+/**
+ * Whether a relative path climbs out of the directory it was taken against.
+ * Matched on the segment rather than the prefix, so that a file honestly named
+ * `..hidden` is judged rather than skipped.
+ */
+export function leavesDirectory(relativePath: string): boolean {
+    const posix = toPosix(relativePath);
+    return posix === '..' || posix.startsWith('../') || path.isAbsolute(relativePath);
+}
+
 /** Compile `.gitignore`-syntax patterns into rules that answer from memory. */
 export function compileIgnoreRules(patterns: string | readonly string[]): IgnoreRules {
-    const compiled = ignore().add(Array.isArray(patterns) ? [...patterns] : patterns as string);
+    const compiled = ignore().add(patterns);
 
     return {
         decide(relativePath: string): IgnoreVerdict | undefined {
@@ -37,7 +47,7 @@ export function compileIgnoreRules(patterns: string | readonly string[]): Ignore
 
             // Nothing outside the directory these rules govern is theirs to
             // judge, and the `ignore` package refuses such a path outright.
-            if (candidate === '' || candidate.startsWith('..')) {
+            if (candidate === '' || leavesDirectory(relativePath)) {
                 return undefined;
             }
 

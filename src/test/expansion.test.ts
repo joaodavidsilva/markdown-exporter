@@ -200,6 +200,22 @@ test('a nested .gitignore inside a directory the root excluded is never reached'
     });
 });
 
+test('a file whose name begins with two dots is judged like any other', async () => {
+    await withWorkspace({
+        '.gitignore': '..secret\n',
+        '..secret': '',
+        '..kept': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(relativePaths(entries), ['..kept', '.gitignore']);
+    });
+});
+
 test('an .exportignore at the workspace root excludes a file', async () => {
     await withWorkspace({
         '.exportignore': 'notes.md\n',
