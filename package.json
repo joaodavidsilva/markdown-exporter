@@ -136,6 +136,12 @@
             "description": "Exact file path to ignore"
           },
           "scope": "resource"
+        },
+        "markdownExport.redactionEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mask likely secrets before they reach the export: .env and its variants have their values replaced and their keys kept, and recognisable credential patterns (API keys, tokens, database passwords) are replaced wherever they appear in an embedded file. Best-effort — known shapes only, not a guarantee. Turn off to export a fixture file with deliberately fake keys unmasked.",
+          "scope": "resource"
         }
       }
     }

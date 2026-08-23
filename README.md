@@ -9,6 +9,7 @@ A VS Code extension that exports selected files and folders to a single markdown
 - **Automatic timestamping**: Output files automatically get timestamps to prevent overwrites
 - **Smart ignore system**: Respects nested .gitignore files, an .exportignore of your own, and glob patterns from settings, in a strict priority order
 - **Binary file handling**: Automatically detects and excludes binary files with placeholders
+- **Redaction**: Masks likely secrets — `.env` values, API keys, tokens, database passwords — before they reach the export, best-effort
 - **Clean architecture**: Well-organized codebase with proper separation of concerns
 - **Configurable**: Extensive configuration options for all aspects of export
 - **Cross-platform**: Works on macOS, Windows, and Linux
@@ -198,6 +199,64 @@ selection is still exported.
 Symlinked directories are never followed, so a circular link terminates
 instead of hanging the export.
 
+### Redaction Settings
+
+Redaction masks a secret value inside a file's content while still embedding
+the rest of that file — unlike a stub, the file is not left out, only the
+sensitive spans inside it are replaced. Two mechanisms:
+
+**Whole-file, for `.env` and its variants.** Any file named `.env`, or named
+`.env.` followed by anything — `.env.local`, `.env.production`, `.env.test`,
+`.env.example` and so on — has every `KEY=value` line's value replaced and
+its key kept, so the export still shows what configuration exists without
+showing what it is set to. `export KEY=value` and quoted values
+(`KEY="a value"`, `KEY='a value'`) are recognised too, and a quoted value
+keeps its quotes around the marker. A line with no value is left alone, and
+anything that is not an assignment — a comment, a blank line — is left as it
+is except that it still goes through the pattern matching below, so a
+credential pasted into a comment is still caught.
+
+**Pattern matching, inside any embedded file.** Wherever one of the
+following shapes appears — not only in `.env` files — it is replaced:
+
+| Shape | Marker |
+| --- | --- |
+| AWS access key (`AKIA…`, `ASIA…`) | `[REDACTED: AWS access key]` |
+| GitHub token (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_…`) | `[REDACTED: GitHub token]` |
+| Stripe key (`sk_live_`, `sk_test_`, `pk_live_`, `pk_test_`, `rk_live_`, `rk_test_`) | `[REDACTED: Stripe key]` |
+| OpenAI API key (`sk-…`) | `[REDACTED: OpenAI API key]` |
+| Anthropic API key (`sk-ant-…`) | `[REDACTED: Anthropic API key]` |
+| A JSON Web Token (`eyJ…`.`…`.`…`) | `[REDACTED: JWT]` |
+| A database URL's password (`postgres://user:password@host`, and the same for `postgresql`, `mysql`, `mongodb`, `mongodb+srv`, `redis`, `rediss`, `amqp`, `amqps`) | `[REDACTED: database password]` — the scheme, user and host stay visible |
+
+A replacement always says what it removed — `[REDACTED: <what>]` — rather
+than vanishing into an empty string a reader has no way to notice.
+
+**The count is reported.** The notification shown after an export states how
+many Redactions happened, zero included: zero is itself the answer to
+whether a selection contained anything recognisable.
+
+- `markdownExport.redactionEnabled`: Turn Redaction off entirely (default:
+  `true`). Use this for the deliberate case — exporting a fixture file built
+  with fake keys, where masking them would misrepresent the fixture itself.
+  ```json
+  "markdownExport.redactionEnabled": false
+  ```
+
+#### Redaction is best-effort, not a guarantee
+
+Redaction catches known shapes: the `.env` convention by name, and a handful
+of recognisable credential formats by their fixed prefixes. It does not
+understand secrets in general. A credential in a format not listed above, a
+secret with no recognisable prefix, one split across a value in a way that
+breaks the pattern, or one disguised deliberately, passes through unredacted.
+
+Treat Redaction as a safety net that catches the common, recognisable
+cases — not as a substitute for reviewing a selection yourself before
+pasting it somewhere, and not as a reason to put a real secret in a file you
+intend to export. A safety net presented as a guarantee is worse than no
+safety net at all, because it invites you to stop checking.
+
 ### Default Binary Extensions
 
 The extension includes these default binary extensions:
@@ -215,6 +274,9 @@ The generated markdown file includes:
    contains — stubs included, marked with the reason their content is absent
 2. **File sections**: Each file with proper syntax highlighting
 3. **Stubs**: Files mentioned at their path with their content omitted and the reason stated
+4. **Redactions**: A likely secret inside an embedded file, `.env` values
+   included, replaced inline by a marker that names what was removed — see
+   [Redaction Settings](#redaction-settings)
 
 The language hint on each block is chosen by file name first and extension
 second, so `Dockerfile`, `Makefile`, `Gemfile` and `.gitignore` are recognised

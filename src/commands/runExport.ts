@@ -121,6 +121,11 @@ export async function runExportCommand(
  * being counted into. The number is said as approximate wherever it appears —
  * it comes from one vocabulary and the user will paste into another.
  *
+ * The Redaction count sits beside it for the same reason, in the same
+ * message rather than a second notification: it is said every time, zero
+ * included, because zero is itself the answer to the question that count
+ * exists to settle — whether this Selection carried a secret at all.
+ *
  * Past the threshold the same sentence arrives as a warning instead, so an
  * oversized Export is caught at the moment it is made rather than at the
  * moment it is pasted.
@@ -130,8 +135,10 @@ function report(
     configuration: ResolvedConfiguration,
     statistics: ExportStatistics
 ): void {
-    const count = `${approximateTokens(statistics.tokenCount)} (approximate)`;
-    const summary = `Markdown Exporter: ${destination.completionMessage} — ${count}`;
+    const tokens = `${approximateTokens(statistics.tokenCount)} (approximate)`;
+    const redactions =
+        `${groupDigits(statistics.redactionCount)} ${statistics.redactionCount === 1 ? 'redaction' : 'redactions'}`;
+    const summary = `Markdown Exporter: ${destination.completionMessage} — ${tokens}, ${redactions}`;
 
     if (statistics.tokenThresholdExceeded) {
         const threshold = groupDigits(configuration.tokenWarningThreshold);
