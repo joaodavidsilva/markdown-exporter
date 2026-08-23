@@ -4,7 +4,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { ExportCancelled, throwIfCancelled } from './cancellation';
 import { ResolvedConfiguration } from './configuration';
 import { ExportDestination } from './destinations';
-import { EmbeddedEntry, ExpansionEntry, StubEntry, StubReason } from './expansion';
+import { EmbeddedEntry, ExpansionEntry, StubReason } from './expansion';
 import { languageHintFor } from './languages';
 import { ProgressReporter } from './progress';
 
@@ -15,13 +15,27 @@ const readChunkBytes = 64 * 1024;
 const backtickByte = 0x60;
 const minimumFenceLength = 3;
 
-const unreadableNotice = 'Error reading file content.\n\n';
+/**
+ * What an Export says where a Stub's content would have been.
+ *
+ * A Stub is read by a model as often as by a person, so the notice has to say
+ * three things without being mistaken for the file's own content: that
+ * something was left out, that leaving it out was deliberate, and why. A
+ * blockquote is the tool speaking rather than the file, and stating the
+ * threshold in the notice saves the reader guessing what "too large" meant on
+ * the machine the Export was made on.
+ */
+function stubNotices(configuration: ResolvedConfiguration): Record<StubReason, string> {
+    const notice = (reason: string): string => `> **Content omitted** — ${reason}.\n\n`;
 
-const stubNotices: Record<StubReason, string> = {
-    'binary': 'Content omitted: this file is binary.\n\n',
-    'too-large': 'Content omitted: this file is too large.\n\n',
-    'unreadable': 'Content omitted: this file could not be read.\n\n'
-};
+    return {
+        'binary': notice('this file is binary'),
+        'too-large': notice(
+            `this file is larger than the ${configuration.maxFileSizeBytes}-byte limit`
+        ),
+        'unreadable': notice('this path could not be read')
+    };
+}
 
 /** Everything the rendering needs, resolved by the adapter (ADR-0001). */
 export interface ExportRequest {
@@ -48,9 +62,11 @@ export interface ExportStatistics {
  * Destination as it goes rather than assembling the whole document first.
  */
 export async function createExport(request: ExportRequest): Promise<ExportStatistics> {
-    const { entries, destination, signal, onProgress } = request;
+    const { entries, configuration, destination, signal, onProgress } = request;
 
     throwIfCancelled(signal);
+
+    const notices = stubNotices(configuration);
 
     const statistics: ExportStatistics = {
         entryCount: entries.length,
@@ -82,10 +98,10 @@ export async function createExport(request: ExportRequest): Promise<ExportStatis
 
         if (entry.classification === 'stub') {
             statistics.stubCount += 1;
-            await writeStub(entry, write);
+            await write(notices[entry.reason]);
         } else {
             statistics.embedCount += 1;
-            await writeEmbeddedContent(entry, write, signal);
+            await writeEmbeddedContent(entry, notices, write, signal);
         }
 
         await write('---\n\n');
@@ -102,16 +118,18 @@ export async function createExport(request: ExportRequest): Promise<ExportStatis
     return statistics;
 }
 
-async function writeStub(entry: StubEntry, write: (chunk: string) => Promise<void>): Promise<void> {
-    await write(stubNotices[entry.reason]);
-}
-
 /**
  * Stream one file into its fence. The file is read in chunks and handed on as
  * it arrives, so neither the file nor the Export is ever held whole.
+ *
+ * Nothing here decides that a file should be a Stub — the Expansion settled
+ * that. What is left is the file that was readable when it was classified and
+ * is not readable now, which speaks with the same voice rather than inventing
+ * a second vocabulary for the same fact.
  */
 async function writeEmbeddedContent(
     entry: EmbeddedEntry,
+    notices: Record<StubReason, string>,
     write: (chunk: string) => Promise<void>,
     signal?: AbortSignal
 ): Promise<void> {
@@ -119,7 +137,7 @@ async function writeEmbeddedContent(
     try {
         handle = await open(entry.absolutePath, 'r');
     } catch {
-        await write(unreadableNotice);
+        await write(notices.unreadable);
         return;
     }
 
@@ -134,7 +152,7 @@ async function writeEmbeddedContent(
             if (error instanceof ExportCancelled) {
                 throw error;
             }
-            await write(unreadableNotice);
+            await write(notices.unreadable);
             return;
         }
 
@@ -156,7 +174,7 @@ async function writeEmbeddedContent(
         await write(`\n${fence}\n\n`);
 
         if (failed) {
-            await write(unreadableNotice);
+            await write(notices.unreadable);
         }
     } finally {
         await handle.close();

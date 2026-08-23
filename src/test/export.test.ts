@@ -1,11 +1,11 @@
 import * as assert from 'node:assert/strict';
-import { readFile, stat } from 'node:fs/promises';
+import { chmod, readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { ExportCancelled } from '../core/cancellation';
 import { createBufferedDestination, ExportDestination, openFileDestination } from '../core/destinations';
 import { createExport } from '../core/export';
-import { expandSelection, ExpansionEntry } from '../core/expansion';
+import { expandSelection, ExpansionEntry, StubReason } from '../core/expansion';
 import { resolvedConfiguration, withWorkspace } from './workspace';
 
 function embedded(root: string, relativePath: string): ExpansionEntry {
@@ -13,6 +13,15 @@ function embedded(root: string, relativePath: string): ExpansionEntry {
         absolutePath: path.join(root, relativePath),
         relativePath,
         classification: 'embed'
+    };
+}
+
+function stub(root: string, relativePath: string, reason: StubReason): ExpansionEntry {
+    return {
+        absolutePath: path.join(root, relativePath),
+        relativePath,
+        classification: 'stub',
+        reason
     };
 }
 
@@ -126,6 +135,42 @@ test('a Stub appears at its path, with its reason stated and its content omitted
     });
 });
 
+test('each Stub reason states itself in the Export', async () => {
+    await withWorkspace({ 'logo.png': 'x', 'huge.log': 'x', 'locked.txt': 'x' }, async root => {
+        const markdown = await renderToText([
+            stub(root, 'logo.png', 'binary'),
+            stub(root, 'huge.log', 'too-large'),
+            stub(root, 'locked.txt', 'unreadable')
+        ]);
+
+        assert.match(markdown, /## logo\.png\n\n> \*\*Content omitted\*\* — this file is binary\./);
+        assert.match(markdown, /## huge\.log\n\n> \*\*Content omitted\*\* — this file is larger than the/);
+        assert.match(markdown, /## locked\.txt\n\n> \*\*Content omitted\*\* — this path could not be read\./);
+    });
+});
+
+test('the too-large notice names the threshold the Export ran with', async () => {
+    await withWorkspace({ 'huge.log': 'x' }, async root => {
+        const destination = createBufferedDestination();
+        await createExport({
+            entries: [stub(root, 'huge.log', 'too-large')],
+            configuration: resolvedConfiguration({ maxFileSizeBytes: 4096 }),
+            destination
+        });
+
+        assert.match(destination.text(), /larger than the 4096-byte limit/);
+    });
+});
+
+test('a Stub omits content the file on disk still has', async () => {
+    await withWorkspace({ 'huge.log': 'secrets of the log\n' }, async root => {
+        const markdown = await renderToText([stub(root, 'huge.log', 'too-large')]);
+
+        assert.equal(markdown.includes('secrets of the log'), false);
+        assert.equal(markdown.includes('```'), false);
+    });
+});
+
 test('an empty Expansion still produces an Export', async () => {
     const markdown = await renderToText([]);
 
@@ -167,14 +212,16 @@ test('content larger than one read is embedded exactly, multi-byte characters in
     });
 });
 
-test('a file that cannot be opened leaves a notice and the Export continues', async () => {
+test('a file that vanished since it was classified says so in the Stub vocabulary', async () => {
     await withWorkspace({ 'present.ts': 'kept\n' }, async root => {
         const markdown = await renderToText([
             embedded(root, 'missing.ts'),
             embedded(root, 'present.ts')
         ]);
 
-        assert.match(markdown, /Error reading file content\./);
+        // The renderer takes no view of its own on why content is missing: it
+        // says what a Stub for the same reason would have said.
+        assert.match(markdown, /\*\*Content omitted\*\* — this path could not be read\./);
         assert.equal(markdown.includes('kept\n'), true);
     });
 });
@@ -371,5 +418,58 @@ test('rendering reports each entry against the total it was given', async () => 
             { completed: 2, total: 3, detail: 'huge.log' },
             { completed: 3, total: 3, detail: 'b.ts' }
         ]);
+    });
+});
+
+test('an Export of a hostile tree is well formed from end to end', async () => {
+    if (process.getuid?.() === 0) {
+        return;
+    }
+
+    const fenced = '# Notes\n\n```js\nconst answer = 42;\n```\n\nDone.\n';
+    const wasm = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+
+    await withWorkspace({
+        'README.md': fenced,
+        'build/module.wasm': wasm,
+        'logs/debug.log': 'x'.repeat(4096),
+        'secret.txt': 'classified',
+        'src/index.ts': 'export const answer = 42;\n'
+    }, async root => {
+        const secret = path.join(root, 'secret.txt');
+        await chmod(secret, 0o000);
+        try {
+            const configuration = resolvedConfiguration({ maxFileSizeBytes: 1024 });
+            const entries = await expandSelection({
+                selectionPaths: [root],
+                workspaceRoot: root,
+                configuration
+            });
+
+            const destination = createBufferedDestination();
+            const statistics = await createExport({ entries, configuration, destination });
+            const markdown = destination.text();
+
+            assert.equal(statistics.entryCount, 5);
+            assert.equal(statistics.embedCount, 2);
+            assert.equal(statistics.stubCount, 3);
+
+            // The fenced markdown is inside a wider fence, so the entry after
+            // it is still a heading rather than the tail of a code block.
+            assert.equal(markdown.includes('````markdown\n' + fenced), true);
+            assert.match(markdown, /## build[/\\]module\.wasm\n\n> \*\*Content omitted\*\* — this file is binary\./);
+            assert.match(markdown, /## logs[/\\]debug\.log\n\n> \*\*Content omitted\*\* — this file is larger than the 1024-byte limit\./);
+            assert.match(markdown, /## secret\.txt\n\n> \*\*Content omitted\*\* — this path could not be read\./);
+            assert.equal(markdown.includes('export const answer = 42;'), true);
+
+            // Nothing binary reached the document as text.
+            assert.equal(markdown.includes('\u0000'), false);
+
+            // Every fence opened is a fence closed.
+            const fences = markdown.match(/^`{3,}/gm) ?? [];
+            assert.equal(fences.length % 2, 0);
+        } finally {
+            await chmod(secret, 0o644);
+        }
     });
 });
