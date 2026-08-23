@@ -8,8 +8,16 @@ import { ResolvedConfiguration } from '../core/configuration';
 import { deliverExport } from '../core/delivery';
 import { DestinationDelivery } from '../core/destinations';
 import { expandSelection } from '../core/expansion';
+import { ExportStatistics } from '../core/export';
+import { approximateTokens, groupDigits } from '../core/tokenCounting';
 
-type Outcome = 'completed' | 'cancelled';
+/**
+ * How a run ended, and — when it produced one — what the Export turned out to
+ * contain. A cancelled run has no Export and so no statistics to report.
+ */
+type Outcome =
+    | { kind: 'cancelled' }
+    | { kind: 'completed'; statistics: ExportStatistics };
 
 /**
  * The Destination one command exports to, and what to say once the Export has
@@ -89,12 +97,12 @@ export async function runExportCommand(
             token
         }));
 
-        if (outcome === 'cancelled') {
+        if (outcome.kind === 'cancelled') {
             void vscode.window.showInformationMessage('Markdown Exporter: Export cancelled');
             return;
         }
 
-        void vscode.window.showInformationMessage(`Markdown Exporter: ${destination.completionMessage}`);
+        report(destination, configuration, outcome.statistics);
     } catch (error) {
         // One failure, one message. Everything that can fail throws out of the
         // progress callback rather than reporting on the way past, so this is
@@ -102,6 +110,38 @@ export async function runExportCommand(
         const message = error instanceof Error ? error.message : 'Unknown error';
         void vscode.window.showErrorMessage(`Markdown Exporter: Export failed (${message})`);
     }
+}
+
+/**
+ * What the user is told once the Export has arrived.
+ *
+ * The token count belongs here rather than inside the Export, for the same
+ * reason the tree's per-file counts belong inside it: the total is a fact
+ * about the whole document, and the document cannot state a total it is still
+ * being counted into. The number is said as approximate wherever it appears —
+ * it comes from one vocabulary and the user will paste into another.
+ *
+ * Past the threshold the same sentence arrives as a warning instead, so an
+ * oversized Export is caught at the moment it is made rather than at the
+ * moment it is pasted.
+ */
+function report(
+    destination: ChosenDestination,
+    configuration: ResolvedConfiguration,
+    statistics: ExportStatistics
+): void {
+    const count = `${approximateTokens(statistics.tokenCount)} (approximate)`;
+    const summary = `Markdown Exporter: ${destination.completionMessage} — ${count}`;
+
+    if (statistics.tokenThresholdExceeded) {
+        const threshold = groupDigits(configuration.tokenWarningThreshold);
+        void vscode.window.showWarningMessage(
+            `${summary}, above the ${threshold}-token warning threshold`
+        );
+        return;
+    }
+
+    void vscode.window.showInformationMessage(summary);
 }
 
 async function runExport(run: ExportRun): Promise<Outcome> {
@@ -122,7 +162,7 @@ async function runExport(run: ExportRun): Promise<Outcome> {
         // Whatever the Destination is, it is opened only after the Expansion
         // has finished, and it is handed the Export only once the rendering
         // has, so cancelling leaves nothing behind either way.
-        await deliverExport({
+        const statistics = await deliverExport({
             entries,
             configuration: run.configuration,
             delivery: run.destination.delivery,
@@ -130,10 +170,10 @@ async function runExport(run: ExportRun): Promise<Outcome> {
             onProgress: reportProgress
         });
 
-        return 'completed';
+        return { kind: 'completed', statistics };
     } catch (error) {
         if (error instanceof ExportCancelled) {
-            return 'cancelled';
+            return { kind: 'cancelled' };
         }
         throw error;
     } finally {

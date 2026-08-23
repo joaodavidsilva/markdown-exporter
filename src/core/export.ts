@@ -8,7 +8,7 @@ import { EmbeddedEntry, ExpansionEntry, StubReason } from './expansion';
 import { renderFileTree } from './fileTree';
 import { languageHintFor } from './languages';
 import { ProgressReporter } from './progress';
-import { createTokenTally, tokenVocabulary } from './tokenCounting';
+import { createTokenTally, TokenTally, tokenVocabulary } from './tokenCounting';
 
 /** How much of a file is read at a time, so no file is held whole in memory. */
 const readChunkBytes = 64 * 1024;
@@ -69,6 +69,10 @@ export interface ExportStatistics {
     embedCount: number;
     stubCount: number;
     characterCount: number;
+    /** Approximate tokens in the whole Export, scaffolding included. */
+    tokenCount: number;
+    /** Whether that total went past the threshold the Export ran with. */
+    tokenThresholdExceeded: boolean;
 }
 
 /**
@@ -105,13 +109,14 @@ export async function createExport(request: ExportRequest): Promise<ExportStatis
         entryCount: entries.length,
         embedCount: 0,
         stubCount: 0,
-        characterCount: 0
+        characterCount: 0,
+        tokenCount: 0,
+        tokenThresholdExceeded: false
     };
 
-    const write = async (chunk: string): Promise<void> => {
-        statistics.characterCount += chunk.length;
-        await destination.write(chunk);
-    };
+    const tally = createTokenTally();
+    const writer = createWriter(destination, statistics, tally);
+    const { write } = writer;
 
     await write('# Project Code Export\n\n');
     await write('## File tree\n\n');
@@ -139,7 +144,7 @@ export async function createExport(request: ExportRequest): Promise<ExportStatis
             await write(notices[entry.reason]);
         } else {
             statistics.embedCount += 1;
-            await writeEmbeddedContent(entry, measurements.get(entry), notices, write, signal);
+            await writeEmbeddedContent(entry, measurements.get(entry), notices, writer, signal);
         }
 
         await write('---\n\n');
@@ -153,7 +158,52 @@ export async function createExport(request: ExportRequest): Promise<ExportStatis
         });
     }
 
+    statistics.tokenCount = tally.total();
+    statistics.tokenThresholdExceeded =
+        configuration.tokenWarningThreshold > 0
+        && statistics.tokenCount > configuration.tokenWarningThreshold;
+
     return statistics;
+}
+
+/**
+ * How the Export reaches its Destination, and what is counted on the way.
+ *
+ * Two ways in, because a file's content is counted before the rendering
+ * starts and counting it again on the way past would double the tokenizer's
+ * work for a number already in hand. Everything else — headings, the tree,
+ * fences, Stub notices — is counted as it is written, which is what makes the
+ * total the whole Export's rather than only its files'.
+ */
+interface ExportWriter {
+    /** Write part of the Export's own structure, counting it as it goes. */
+    write(chunk: string): Promise<void>;
+    /** Write part of a file's content, whose tokens are already counted. */
+    writeContent(chunk: string): Promise<void>;
+    /** Take the tokens of a file measured before the rendering began. */
+    addMeasuredTokens(count: number): void;
+}
+
+function createWriter(
+    destination: ExportDestination,
+    statistics: ExportStatistics,
+    tally: TokenTally
+): ExportWriter {
+    const emit = async (chunk: string): Promise<void> => {
+        statistics.characterCount += chunk.length;
+        await destination.write(chunk);
+    };
+
+    return {
+        async write(chunk: string): Promise<void> {
+            tally.add(chunk);
+            await emit(chunk);
+        },
+        writeContent: emit,
+        addMeasuredTokens(count: number): void {
+            tally.addCounted(count);
+        }
+    };
 }
 
 /** The per-file counts the tree annotates its leaves with. */
@@ -278,13 +328,13 @@ async function writeEmbeddedContent(
     entry: EmbeddedEntry,
     measurement: Measurement | undefined,
     notices: Record<StubReason, string>,
-    write: (chunk: string) => Promise<void>,
+    writer: ExportWriter,
     signal?: AbortSignal
 ): Promise<void> {
     // No measurement means the file could not be read a moment ago, when the
     // fence it would need was being worked out.
     if (!measurement) {
-        await write(notices.unreadable);
+        await writer.write(notices.unreadable);
         return;
     }
 
@@ -292,14 +342,14 @@ async function writeEmbeddedContent(
     try {
         handle = await open(entry.absolutePath, 'r');
     } catch {
-        await write(notices.unreadable);
+        await writer.write(notices.unreadable);
         return;
     }
 
     try {
         const { fence } = measurement;
 
-        await write(`${fence}${languageHintFor(entry.absolutePath)}\n`);
+        await writer.write(`${fence}${languageHintFor(entry.absolutePath)}\n`);
 
         // A closing fence has to start its own line, and content that already
         // ends in a newline has given it one. Writing another unconditionally
@@ -309,7 +359,7 @@ async function writeEmbeddedContent(
             if (chunk.length > 0) {
                 atLineStart = chunk.endsWith('\n');
             }
-            await write(chunk);
+            await writer.writeContent(chunk);
         };
 
         let failed = false;
@@ -325,10 +375,14 @@ async function writeEmbeddedContent(
             failed = true;
         }
 
-        await write(`${atLineStart ? '' : '\n'}${fence}\n\n`);
+        // The content went past uncounted, because measuring it is what
+        // produced the number the tree already states.
+        writer.addMeasuredTokens(measurement.tokenCount);
+
+        await writer.write(`${atLineStart ? '' : '\n'}${fence}\n\n`);
 
         if (failed) {
-            await write(notices.unreadable);
+            await writer.write(notices.unreadable);
         }
     } finally {
         await handle.close();

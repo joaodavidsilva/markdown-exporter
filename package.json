@@ -121,6 +121,12 @@
           "description": "Files larger than this many bytes become stubs: listed in the export at their path, with their content omitted and the reason stated. Zero means no limit.",
           "scope": "resource"
         },
+        "markdownExport.tokenWarningThreshold": {
+          "type": "number",
+          "default": 128000,
+          "description": "Warn when an export's approximate token count goes above this. Counts come from the o200k_base BPE vocabulary and are a guide, not a contract: other model families tokenize differently. Zero means never warn.",
+          "scope": "resource"
+        },
         "markdownExport.binaryFiles": {
           "type": "array",
           "default": [],

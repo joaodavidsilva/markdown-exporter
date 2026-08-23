@@ -23,6 +23,12 @@ export interface ResolvedConfiguration {
      * Zero, or anything below it, means no limit.
      */
     maxFileSizeBytes: number;
+    /**
+     * Above this many approximate tokens an Export is reported with a
+     * warning rather than as ordinary news. Zero, or anything below it,
+     * means never warn.
+     */
+    tokenWarningThreshold: number;
 }
 
 /**
@@ -31,6 +37,13 @@ export interface ResolvedConfiguration {
  * the rest of the Export its room.
  */
 export const defaultMaxFileSizeBytes = 1024 * 1024;
+
+/**
+ * The narrowest context window an Export is likely to be pasted into. Past it
+ * the Export may still fit the model in front of the user, which is why this
+ * is a warning and not a limit.
+ */
+export const defaultTokenWarningThreshold = 128_000;
 
 export const defaultBinaryFileExtensions: readonly string[] = [
     'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff', 'ico',

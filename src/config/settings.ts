@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { defaultBinaryFileExtensions, defaultMaxFileSizeBytes, ResolvedConfiguration } from '../core/configuration';
+import { defaultBinaryFileExtensions, defaultMaxFileSizeBytes, defaultTokenWarningThreshold, ResolvedConfiguration } from '../core/configuration';
 
 /**
  * The adapter boundary for configuration: read the editor's settings once per
@@ -13,6 +13,7 @@ export function getConfiguration(): ResolvedConfiguration {
         additionalIgnore: config.get<string[]>('additionalIgnore', []),
         binaryFileExtensions: config.get<string[]>('binaryFileExtensions', [...defaultBinaryFileExtensions]),
         binaryFiles: config.get<string[]>('binaryFiles', []),
-        maxFileSizeBytes: config.get<number>('maxFileSizeBytes', defaultMaxFileSizeBytes)
+        maxFileSizeBytes: config.get<number>('maxFileSizeBytes', defaultMaxFileSizeBytes),
+        tokenWarningThreshold: config.get<number>('tokenWarningThreshold', defaultTokenWarningThreshold)
     };
 }
