@@ -1,17 +1,41 @@
-import { access, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { getWorkspaceRoot } from '../adapter/paths';
+import { createProgressBridge } from '../adapter/progress';
 import { getSelectionPaths } from '../adapter/selection';
 import { getConfiguration } from '../config/settings';
+import { ExportCancelled } from '../core/cancellation';
+import { ResolvedConfiguration } from '../core/configuration';
 import { openFileDestination } from '../core/destinations';
 import { createExport } from '../core/export';
-import { expandSelection, ExpansionEntry } from '../core/expansion';
+import { expandSelection } from '../core/expansion';
+
+type Outcome = 'completed' | 'cancelled';
+
+interface ExportRun {
+    selectionPaths: string[];
+    workspaceRoot: string;
+    configuration: ResolvedConfiguration;
+    /** The name this Export writes to, so the Expansion can leave it out. */
+    exportFileName: string;
+    exportPath: string;
+    progress: vscode.Progress<{ message?: string; increment?: number }>;
+    token: vscode.CancellationToken;
+}
 
 function generateTimestamp(): string {
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+}
+
+function timestampedName(outputFile: string): string {
+    const rawBase = path.basename(outputFile).trim();
+    const baseName = rawBase.length === 0 ? 'export.md' : rawBase;
+    const extension = path.extname(baseName);
+    const nameOnly = extension ? baseName.slice(0, baseName.length - extension.length) : baseName;
+    return `${nameOnly}_${generateTimestamp()}${extension}`;
 }
 
 export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Uri[] | undefined): Promise<void> {
@@ -28,71 +52,85 @@ export async function exportCommand(uri: vscode.Uri | undefined, uris: vscode.Ur
     }
 
     try {
-        // Build timestamped output file name
-        const config = getConfiguration();
-        const rawBase = path.basename(config.outputFile).trim();
-        const baseName = rawBase.length === 0 ? 'export.md' : rawBase;
-        const ext = path.extname(baseName);
-        const nameOnly = ext ? baseName.slice(0, baseName.length - ext.length) : baseName;
-        const stampedName = `${nameOnly}_${generateTimestamp()}${ext}`;
-        const stampedPath = path.join(workspaceRoot, stampedName);
+        const configuration = getConfiguration();
+        const exportFileName = timestampedName(configuration.outputFile);
+        const exportPath = path.join(workspaceRoot, exportFileName);
 
-        await vscode.window.withProgress({
+        const outcome = await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: 'Exporting to Markdown',
-            cancellable: false
-        }, async (progress) => {
-            progress.report({ increment: 0, message: 'Scanning files...' });
-            let entries: ExpansionEntry[] = [];
-            try {
-                entries = await expandSelection({
-                    selectionPaths,
-                    workspaceRoot,
-                    configuration: config,
-                    exportFileName: stampedName
-                });
-            } catch (walkErr) {
-                const msg = walkErr instanceof Error ? walkErr.message : String(walkErr);
-                void vscode.window.showErrorMessage(`Markdown Exporter: Failed scanning files (${msg})`);
-                return;
-            }
+            cancellable: true
+        }, (progress, token) => runExport({
+            selectionPaths,
+            workspaceRoot,
+            configuration,
+            exportFileName,
+            exportPath,
+            progress,
+            token
+        }));
 
-            progress.report({ increment: 50, message: 'Building markdown...' });
-            try {
-                const destination = await openFileDestination(stampedPath);
-                try {
-                    await createExport({ entries, configuration: config, destination });
-                } finally {
-                    await destination.close();
-                }
-            } catch (mdErr) {
-                // The Destination writes through, so a failure can leave a
-                // partial Export behind. Remove it rather than hand back half
-                // a document.
-                await rm(stampedPath, { force: true });
-                const msg = mdErr instanceof Error ? mdErr.message : String(mdErr);
-                void vscode.window.showErrorMessage(`Markdown Exporter: Failed building markdown (${msg})`);
-                return;
-            }
-            progress.report({ increment: 100, message: 'Done!' });
-        });
-        // Verify file existence (defensive)
-        if (!(await exists(stampedPath))) {
-            void vscode.window.showErrorMessage(`Markdown Exporter: Expected output not found (${stampedPath})`);
-        } else {
-            void vscode.window.showInformationMessage(`Markdown Exporter: Export completed successfully (${stampedPath})`);
+        if (outcome === 'cancelled') {
+            void vscode.window.showInformationMessage('Markdown Exporter: Export cancelled');
+            return;
         }
+
+        void vscode.window.showInformationMessage(`Markdown Exporter: Export completed successfully (${exportPath})`);
     } catch (error) {
+        // One failure, one message. Everything that can fail throws out of the
+        // progress callback rather than reporting on the way past, so this is
+        // the only place an Export is ever reported as failed.
         const message = error instanceof Error ? error.message : 'Unknown error';
         void vscode.window.showErrorMessage(`Markdown Exporter: Export failed (${message})`);
     }
 }
 
-async function exists(absolutePath: string): Promise<boolean> {
+async function runExport(run: ExportRun): Promise<Outcome> {
+    const controller = new AbortController();
+    const subscription = run.token.onCancellationRequested(() => controller.abort());
+    const reportProgress = createProgressBridge(run.progress);
+
     try {
-        await access(absolutePath);
-        return true;
-    } catch {
-        return false;
+        const entries = await expandSelection({
+            selectionPaths: run.selectionPaths,
+            workspaceRoot: run.workspaceRoot,
+            configuration: run.configuration,
+            exportFileName: run.exportFileName,
+            signal: controller.signal,
+            onProgress: reportProgress
+        });
+
+        // The file is opened only once the Expansion has finished, so
+        // cancelling during the walk never creates one to clean up.
+        const destination = await openFileDestination(run.exportPath);
+        try {
+            try {
+                await createExport({
+                    entries,
+                    configuration: run.configuration,
+                    destination,
+                    signal: controller.signal,
+                    onProgress: reportProgress
+                });
+            } finally {
+                await destination.close();
+            }
+        } catch (error) {
+            // The Destination writes through, so a failure can leave a partial
+            // Export behind. Remove it rather than hand back half a document —
+            // and a cancellation arrives here by the same route, so it leaves
+            // nothing behind either.
+            await rm(run.exportPath, { force: true });
+            throw error;
+        }
+
+        return 'completed';
+    } catch (error) {
+        if (error instanceof ExportCancelled) {
+            return 'cancelled';
+        }
+        throw error;
+    } finally {
+        subscription.dispose();
     }
 }
