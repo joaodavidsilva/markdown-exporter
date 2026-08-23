@@ -70,12 +70,17 @@ export async function expandSelection(request: ExpansionRequest): Promise<Expans
             continue;
         }
 
-        if (exclusions.excludes(selectionPath)) {
+        if (stats.isFile()) {
+            if (!exclusions.excludes(selectionPath)) {
+                found(walk, selectionPath);
+            }
             continue;
         }
 
-        if (stats.isFile()) {
-            found(walk, selectionPath);
+        // Only the built-in suppression is consulted for a picked folder: what
+        // the user's own Exclusion rules do to a directory they picked
+        // outright is a question this ticket deliberately leaves open.
+        if (exclusions.suppresses(selectionPath)) {
             continue;
         }
 

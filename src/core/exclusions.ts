@@ -29,6 +29,13 @@ function isSuppressed(relativePath: string): boolean {
 export interface CompiledExclusions {
     /** Whether an Exclusion removes this path from the Expansion. */
     excludes(absolutePath: string): boolean;
+    /**
+     * Whether the built-in suppression alone removes this path, with no
+     * configurable source consulted. Kept apart from `excludes` because the
+     * two answer to different authorities: the suppression is the tool's own
+     * and cannot be turned off, while every other source is the user's.
+     */
+    suppresses(absolutePath: string): boolean;
 }
 
 /**
@@ -52,7 +59,13 @@ export async function compileExclusions(
         ? path.join(workspaceRoot, exportFileName)
         : undefined;
 
+    const suppresses = (absolutePath: string): boolean => {
+        const relativePath = path.relative(workspaceRoot, absolutePath);
+        return relativePath !== '' && isSuppressed(relativePath);
+    };
+
     return {
+        suppresses,
         excludes(absolutePath: string): boolean {
             const relativePath = path.relative(workspaceRoot, absolutePath);
 
@@ -62,7 +75,7 @@ export async function compileExclusions(
                 return false;
             }
 
-            if (isSuppressed(relativePath)) {
+            if (suppresses(absolutePath)) {
                 return true;
             }
 
