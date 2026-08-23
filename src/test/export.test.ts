@@ -47,7 +47,25 @@ test('a file is embedded inside a fence carrying the language hint for its exten
     await withWorkspace({ 'src/index.ts': 'const answer = 42;\n' }, async root => {
         const markdown = await renderToText([embedded(root, path.join('src', 'index.ts'))]);
 
-        assert.equal(markdown.includes('```typescript\nconst answer = 42;\n\n```'), true);
+        // The closing fence follows the content directly: the file's own
+        // trailing newline is the one that puts the fence on its own line.
+        assert.equal(markdown.includes('```typescript\nconst answer = 42;\n```'), true);
+    });
+});
+
+test('a file whose content does not end in a newline still closes on its own line', async () => {
+    await withWorkspace({ 'partial.ts': 'const answer = 42;' }, async root => {
+        const markdown = await renderToText([embedded(root, 'partial.ts')]);
+
+        assert.equal(markdown.includes('```typescript\nconst answer = 42;\n```'), true);
+    });
+});
+
+test('an empty file closes its fence immediately', async () => {
+    await withWorkspace({ 'empty.ts': '' }, async root => {
+        const markdown = await renderToText([embedded(root, 'empty.ts')]);
+
+        assert.equal(markdown.includes('```typescript\n```'), true);
     });
 });
 

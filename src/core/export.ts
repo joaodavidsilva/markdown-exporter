@@ -158,9 +158,20 @@ async function writeEmbeddedContent(
 
         await write(`${fence}${languageHintFor(entry.absolutePath)}\n`);
 
+        // A closing fence has to start its own line, and content that already
+        // ends in a newline has given it one. Writing another unconditionally
+        // is what put a blank line before every closing fence in the Export.
+        let atLineStart = true;
+        const writeContent = async (chunk: string): Promise<void> => {
+            if (chunk.length > 0) {
+                atLineStart = chunk.endsWith('\n');
+            }
+            await write(chunk);
+        };
+
         let failed = false;
         try {
-            await streamContent(handle, write, signal);
+            await streamContent(handle, writeContent, signal);
         } catch (error) {
             if (error instanceof ExportCancelled) {
                 throw error;
@@ -171,7 +182,7 @@ async function writeEmbeddedContent(
             failed = true;
         }
 
-        await write(`\n${fence}\n\n`);
+        await write(`${atLineStart ? '' : '\n'}${fence}\n\n`);
 
         if (failed) {
             await write(notices.unreadable);
