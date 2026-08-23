@@ -31,6 +31,30 @@ async function renderToText(entries: ExpansionEntry[]): Promise<string> {
     return destination.text();
 }
 
+/** The tree drawn at the head of an Export, without its fence. */
+function treeOf(markdown: string): string {
+    const match = /^## File tree\n\n(`{3,})\n([\s\S]*?)\n\1\n/m.exec(markdown);
+    if (!match) {
+        assert.fail('the Export has no file tree');
+    }
+    return match[2];
+}
+
+/**
+ * The body of one entry's section: what follows its heading, up to the rule
+ * that ends it. An Export now opens with a fenced file tree, so a claim about
+ * one entry has to be made against that entry rather than the whole document.
+ */
+function sectionFor(markdown: string, relativePath: string): string {
+    const heading = `\n## ${relativePath}\n\n`;
+    const start = markdown.indexOf(heading);
+    assert.notEqual(start, -1, `no section for ${relativePath}`);
+
+    const body = markdown.slice(start + heading.length);
+    const end = body.indexOf('\n---\n');
+    return end === -1 ? body : body.slice(0, end);
+}
+
 test('every entry gets a heading at its path', async () => {
     await withWorkspace({ 'src/index.ts': 'export {};\n', 'README.md': '# Hi\n' }, async root => {
         const markdown = await renderToText([
@@ -40,6 +64,178 @@ test('every entry gets a heading at its path', async () => {
 
         assert.equal(markdown.includes('\n## README.md\n'), true);
         assert.equal(markdown.includes(`\n## ${path.join('src', 'index.ts')}\n`), true);
+    });
+});
+
+test('the Export opens with a file tree of exactly the entries it contains', async () => {
+    await withWorkspace({
+        'README.md': '# Hi\n',
+        'src/index.ts': 'export {};\n',
+        'src/util.ts': 'export {};\n',
+        'left-out.ts': 'export {};\n'
+    }, async root => {
+        const markdown = await renderToText([
+            embedded(root, 'README.md'),
+            embedded(root, path.join('src', 'index.ts')),
+            embedded(root, path.join('src', 'util.ts'))
+        ]);
+
+        assert.equal(treeOf(markdown), [
+            '.',
+            '├── README.md',
+            '└── src/',
+            '    ├── index.ts',
+            '    └── util.ts'
+        ].join('\n'));
+
+        // A file on disk that is not an entry is nowhere in the Export.
+        assert.equal(markdown.includes('left-out.ts'), false);
+        // And the tree is read before any of the code it describes.
+        assert.equal(markdown.indexOf('## File tree') < markdown.indexOf('## README.md'), true);
+    });
+});
+
+test('the tree draws nesting to whatever depth the Selection reaches', async () => {
+    await withWorkspace({
+        'a/b/c/d/leaf.ts': 'export {};\n',
+        'a/b/other.ts': 'export {};\n',
+        'a/top.ts': 'export {};\n'
+    }, async root => {
+        const markdown = await renderToText([
+            embedded(root, path.join('a', 'b', 'c', 'd', 'leaf.ts')),
+            embedded(root, path.join('a', 'b', 'other.ts')),
+            embedded(root, path.join('a', 'top.ts'))
+        ]);
+
+        assert.equal(treeOf(markdown), [
+            '.',
+            '└── a/',
+            '    ├── b/',
+            '    │   ├── c/',
+            '    │   │   └── d/',
+            '    │   │       └── leaf.ts',
+            '    │   └── other.ts',
+            '    └── top.ts'
+        ].join('\n'));
+    });
+});
+
+test('a Stub stands in the tree with the reason its content is absent', async () => {
+    await withWorkspace({ 'src/index.ts': 'export {};\n' }, async root => {
+        const markdown = await renderToText([
+            embedded(root, path.join('src', 'index.ts')),
+            stub(root, path.join('assets', 'logo.png'), 'binary'),
+            stub(root, path.join('logs', 'debug.log'), 'too-large'),
+            stub(root, 'secret.txt', 'unreadable')
+        ]);
+
+        assert.equal(treeOf(markdown), [
+            '.',
+            '├── src/',
+            '│   └── index.ts',
+            '├── assets/',
+            '│   └── logo.png  (omitted: binary)',
+            '├── logs/',
+            '│   └── debug.log  (omitted: too large)',
+            '└── secret.txt  (omitted: unreadable)'
+        ].join('\n'));
+    });
+});
+
+test('a Selection of a single file still opens with its tree', async () => {
+    await withWorkspace({ 'notes.md': 'text\n' }, async root => {
+        const markdown = await renderToText([embedded(root, 'notes.md')]);
+
+        assert.equal(treeOf(markdown), '.\n└── notes.md');
+    });
+});
+
+test('an empty Expansion draws a tree with nothing under its root', async () => {
+    const markdown = await renderToText([]);
+
+    assert.equal(treeOf(markdown), '.');
+});
+
+test('names outside ASCII reach the tree intact', async () => {
+    await withWorkspace({
+        'documentação/índice.md': 'texto\n',
+        'ficheiros/日本語.txt': 'text\n',
+        'emoji/🚀.md': 'text\n'
+    }, async root => {
+        const markdown = await renderToText([
+            embedded(root, path.join('documentação', 'índice.md')),
+            embedded(root, path.join('ficheiros', '日本語.txt')),
+            embedded(root, path.join('emoji', '🚀.md'))
+        ]);
+
+        assert.equal(treeOf(markdown), [
+            '.',
+            '├── documentação/',
+            '│   └── índice.md',
+            '├── ficheiros/',
+            '│   └── 日本語.txt',
+            '└── emoji/',
+            '    └── 🚀.md'
+        ].join('\n'));
+    });
+});
+
+test('a name carrying backticks widens the tree fence rather than breaking it', async () => {
+    await withWorkspace({ 'a```b.ts': 'export {};\n' }, async root => {
+        const markdown = await renderToText([embedded(root, 'a```b.ts')]);
+
+        assert.equal(treeOf(markdown), '.\n└── a```b.ts');
+        assert.equal(markdown.includes('## File tree\n\n````\n'), true);
+    });
+});
+
+test('the index with its broken anchors is gone', async () => {
+    await withWorkspace({ 'README.md': '# Hi\n', 'src/index.ts': 'export {};\n' }, async root => {
+        const markdown = await renderToText([
+            embedded(root, 'README.md'),
+            embedded(root, path.join('src', 'index.ts'))
+        ]);
+
+        assert.equal(markdown.includes('## Index'), false);
+        // No link of any kind survives, so no dead anchor can survive either.
+        assert.equal(/\]\(#/.test(markdown), false);
+    });
+});
+
+test('the tree of a real Expansion names exactly the entries the Export carries', async () => {
+    const wasm = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+
+    await withWorkspace({
+        '.gitignore': '*.log\n',
+        'README.md': '# Hi\n',
+        'build/module.wasm': wasm,
+        'logs/debug.log': 'noise\n',
+        'src/deep/util.ts': 'export {};\n',
+        'src/index.ts': 'export {};\n'
+    }, async root => {
+        const configuration = resolvedConfiguration();
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration
+        });
+
+        const destination = createBufferedDestination();
+        await createExport({ entries, configuration, destination });
+
+        const leaves = treeOf(destination.text())
+            .split('\n')
+            .slice(1)
+            .map(line => line.replace(/^[^\p{L}\p{N}._]*/u, '').replace(/ {2}\(omitted: .*\)$/, ''))
+            .filter(label => !label.endsWith('/'));
+
+        assert.deepEqual(
+            leaves.sort(),
+            entries.map(entry => path.basename(entry.relativePath)).sort()
+        );
+        // The Exclusion is absent from the tree; the Stub is present in it.
+        assert.equal(destination.text().includes('debug.log'), false);
+        assert.equal(leaves.includes('module.wasm'), true);
     });
 });
 
@@ -244,9 +440,11 @@ test('a Stub appears at its path, with its reason stated and its content omitted
             reason: 'binary'
         }]);
 
+        const section = sectionFor(markdown, path.join('assets', 'logo.png'));
+
         assert.equal(markdown.includes(path.join('assets', 'logo.png')), true);
-        assert.match(markdown, /binary/);
-        assert.equal(markdown.includes('```'), false);
+        assert.match(section, /binary/);
+        assert.equal(section.includes('```'), false);
     });
 });
 
@@ -282,7 +480,7 @@ test('a Stub omits content the file on disk still has', async () => {
         const markdown = await renderToText([stub(root, 'huge.log', 'too-large')]);
 
         assert.equal(markdown.includes('secrets of the log'), false);
-        assert.equal(markdown.includes('```'), false);
+        assert.equal(sectionFor(markdown, 'huge.log').includes('```'), false);
     });
 });
 

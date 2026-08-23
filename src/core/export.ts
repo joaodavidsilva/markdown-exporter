@@ -5,6 +5,7 @@ import { ExportCancelled, throwIfCancelled } from './cancellation';
 import { ResolvedConfiguration } from './configuration';
 import { ExportDestination } from './destinations';
 import { EmbeddedEntry, ExpansionEntry, StubReason } from './expansion';
+import { renderFileTree } from './fileTree';
 import { languageHintFor } from './languages';
 import { ProgressReporter } from './progress';
 
@@ -81,13 +82,17 @@ export async function createExport(request: ExportRequest): Promise<ExportStatis
     };
 
     await write('# Project Code Export\n\n');
-    await write('## Index\n\n');
+    await write('## File tree\n\n');
 
-    for (const entry of entries) {
-        await write(`- [${entry.relativePath}](#${entry.relativePath.replace(/[/\\.]/g, '-')})\n`);
-    }
+    // Inside a fence, and inside one widened past its own content for the same
+    // reason a file's is: a name may contain backticks, and a tree that broke
+    // the document it opens would be worse than no tree. The fence is also
+    // what keeps the connectors from being read as prose to be reflowed.
+    const tree = renderFileTree(entries);
+    const treeFence = fenceOf(longestBacktickRunIn(tree));
+    await write(`${treeFence}\n${tree}${treeFence}\n\n`);
 
-    await write('\n---\n\n');
+    await write('---\n\n');
 
     let completed = 0;
 
@@ -225,6 +230,25 @@ async function longestBacktickRun(handle: FileHandle, signal?: AbortSignal): Pro
             }
         }
     }
+}
+
+/** The same count as longestBacktickRun, for text already held in memory. */
+function longestBacktickRunIn(text: string): number {
+    let longest = 0;
+    let current = 0;
+
+    for (const character of text) {
+        if (character === '`') {
+            current += 1;
+            if (current > longest) {
+                longest = current;
+            }
+        } else {
+            current = 0;
+        }
+    }
+
+    return longest;
 }
 
 /**

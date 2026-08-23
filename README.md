@@ -140,38 +140,46 @@ The extension includes these default binary extensions:
 
 The generated markdown file includes:
 
-1. **Index section**: Links to all exported files
+1. **File tree**: the shape of the export, drawn from exactly the entries it
+   contains — stubs included, marked with the reason their content is absent
 2. **File sections**: Each file with proper syntax highlighting
 3. **Stubs**: Files mentioned at their path with their content omitted and the reason stated
 
+The language hint on each block is chosen by file name first and extension
+second, so `Dockerfile`, `Makefile`, `Gemfile` and `.gitignore` are recognised
+even though they have no extension. An extension the map does not know produces
+no hint rather than a wrong one.
+
 ### Example Output
 
-```markdown
+````markdown
 # Project Code Export
 
-## Index
+## File tree
 
-- [src/index.ts](#src-index-ts)
-- [package.json](#package-json)
-- [README.md](#readme-md)
+```
+.
+├── Dockerfile
+├── assets/
+│   └── logo.png  (omitted: binary)
+└── src/
+    └── index.ts
+```
+
+---
+
+## Dockerfile
+
+```dockerfile
+FROM node:20
+```
 
 ---
 
 ## src/index.ts
 
 ```typescript
-import * as vscode from 'vscode';
-// ... code content
-```
-
----
-
-## package.json
-
-```json
-{
-  "name": "my-project"
-  // ... code content
+export const answer = 42;
 ```
 
 ---
@@ -181,7 +189,7 @@ import * as vscode from 'vscode';
 > **Content omitted** — this file is binary.
 
 ---
-```
+````
 
 ## Changelog
 
