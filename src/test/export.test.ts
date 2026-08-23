@@ -71,7 +71,7 @@ test('every entry gets a heading at its path', async () => {
     });
 });
 
-test('the Export opens with a file tree of exactly the entries it contains', async () => {
+test("the file tree is rendered before any entry's own section", async () => {
     await withWorkspace({
         'README.md': '# Hi\n',
         'src/index.ts': 'export {};\n',
@@ -84,82 +84,13 @@ test('the Export opens with a file tree of exactly the entries it contains', asy
             embedded(root, path.join('src', 'util.ts'))
         ]);
 
-        assert.equal(treeOf(markdown), [
-            '.',
-            '├── README.md  (~3 tokens)',
-            '└── src/',
-            '    ├── index.ts  (~2 tokens)',
-            '    └── util.ts  (~2 tokens)'
-        ].join('\n'));
-
         // A file on disk that is not an entry is nowhere in the Export.
         assert.equal(markdown.includes('left-out.ts'), false);
-        // And the tree is read before any of the code it describes.
+        // The tree is read before any of the code it describes — an
+        // ordering only a full render can prove. The tree's own content,
+        // nesting and annotations included, is proven directly and without
+        // a workspace in fileTree.test.ts.
         assert.equal(markdown.indexOf('## File tree') < markdown.indexOf('## README.md'), true);
-    });
-});
-
-test('the tree draws nesting to whatever depth the Selection reaches', async () => {
-    await withWorkspace({
-        'a/b/c/d/leaf.ts': 'export {};\n',
-        'a/b/other.ts': 'export {};\n',
-        'a/top.ts': 'export {};\n'
-    }, async root => {
-        const markdown = await renderToText([
-            embedded(root, path.join('a', 'b', 'c', 'd', 'leaf.ts')),
-            embedded(root, path.join('a', 'b', 'other.ts')),
-            embedded(root, path.join('a', 'top.ts'))
-        ]);
-
-        assert.equal(treeOf(markdown), [
-            '.',
-            '└── a/',
-            '    ├── b/',
-            '    │   ├── c/',
-            '    │   │   └── d/',
-            '    │   │       └── leaf.ts  (~2 tokens)',
-            '    │   └── other.ts  (~2 tokens)',
-            '    └── top.ts  (~2 tokens)'
-        ].join('\n'));
-    });
-});
-
-test('a Stub stands in the tree with the reason its content is absent', async () => {
-    await withWorkspace({ 'src/index.ts': 'export {};\n' }, async root => {
-        const markdown = await renderToText([
-            embedded(root, path.join('src', 'index.ts')),
-            stub(root, path.join('assets', 'logo.png'), 'binary'),
-            stub(root, path.join('logs', 'debug.log'), 'too-large'),
-            stub(root, 'secret.txt', 'unreadable')
-        ]);
-
-        assert.equal(treeOf(markdown), [
-            '.',
-            '├── src/',
-            '│   └── index.ts  (~2 tokens)',
-            '├── assets/',
-            '│   └── logo.png  (omitted: binary)',
-            '├── logs/',
-            '│   └── debug.log  (omitted: too large)',
-            '└── secret.txt  (omitted: unreadable)'
-        ].join('\n'));
-
-        // A Stub has no content and so nothing to count. The slot a token
-        // count would sit in is the same one its reason already fills, and
-        // the two never appear together on one line.
-        assert.equal(/omitted:[^\n]*tokens/.test(markdown), false);
-        assert.equal(/tokens\)[^\n]*omitted:/.test(markdown), false);
-    });
-});
-
-test('an embedded file too small to have content is still annotated, at zero rather than omitted', async () => {
-    await withWorkspace({ 'empty.ts': '' }, async root => {
-        const markdown = await renderToText([embedded(root, 'empty.ts')]);
-
-        // Zero tokens is still a fact about the file, not an absence of one —
-        // an empty file is embedded, not a Stub, so it earns a count like any
-        // other embedded file rather than the Stub vocabulary.
-        assert.equal(treeOf(markdown), '.\n└── empty.ts  (~0 tokens)');
     });
 });
 
@@ -179,20 +110,6 @@ test('unicode content is counted by the real vocabulary, not a character heurist
         // number here (187): the multi-byte content is what tells them apart.
         assert.notEqual(350, Math.round(content.length / 4));
     });
-});
-
-test('a Selection of a single file still opens with its tree', async () => {
-    await withWorkspace({ 'notes.md': 'text\n' }, async root => {
-        const markdown = await renderToText([embedded(root, 'notes.md')]);
-
-        assert.equal(treeOf(markdown), '.\n└── notes.md  (~2 tokens)');
-    });
-});
-
-test('an empty Expansion draws a tree with nothing under its root', async () => {
-    const markdown = await renderToText([]);
-
-    assert.equal(treeOf(markdown), '.');
 });
 
 test('names outside ASCII reach the tree intact', async () => {
