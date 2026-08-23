@@ -29,6 +29,13 @@ export interface ResolvedConfiguration {
      * means never warn.
      */
     tokenWarningThreshold: number;
+    /**
+     * Whether Redaction runs at all. On by default, since a Selection is
+     * more likely to contain a secret by accident than on purpose; off is
+     * for the deliberate case — exporting a fixture built with fake keys,
+     * where masking them would misrepresent the fixture itself.
+     */
+    redactionEnabled: boolean;
 }
 
 /**
@@ -44,6 +51,13 @@ export const defaultMaxFileSizeBytes = 1024 * 1024;
  * is a warning and not a limit.
  */
 export const defaultTokenWarningThreshold = 128_000;
+
+/**
+ * Redaction defaults to on: a Selection that happens to contain a secret is
+ * the case worth protecting against by default, and turning it off is one
+ * setting away for the fixture-export case that needs to.
+ */
+export const defaultRedactionEnabled = true;
 
 export const defaultBinaryFileExtensions: readonly string[] = [
     'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff', 'ico',

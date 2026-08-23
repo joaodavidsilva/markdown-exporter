@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { defaultBinaryFileExtensions, defaultMaxFileSizeBytes, defaultTokenWarningThreshold, ResolvedConfiguration } from '../core/configuration';
+import { defaultBinaryFileExtensions, defaultMaxFileSizeBytes, defaultRedactionEnabled, defaultTokenWarningThreshold, ResolvedConfiguration } from '../core/configuration';
 
 /** A symlink to lay down, rather than a file with content. */
 export interface WorkspaceSymlink {
@@ -80,6 +80,7 @@ export function resolvedConfiguration(
         binaryFiles: [],
         maxFileSizeBytes: defaultMaxFileSizeBytes,
         tokenWarningThreshold: defaultTokenWarningThreshold,
+        redactionEnabled: defaultRedactionEnabled,
         ...overrides
     };
 }
