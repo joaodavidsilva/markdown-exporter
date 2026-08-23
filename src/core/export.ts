@@ -444,7 +444,7 @@ async function writeEmbeddedContent(
 }
 
 /** The longest unbroken run of backticks, carrying a run in across chunks. */
-function countBacktickRuns(text: string, run: { current: number; longest: number }): void {
+export function countBacktickRuns(text: string, run: { current: number; longest: number }): void {
     for (let index = 0; index < text.length; index += 1) {
         if (text.charCodeAt(index) === backtickByte) {
             run.current += 1;
@@ -468,7 +468,7 @@ function longestBacktickRunIn(text: string): number {
  * A fence one backtick longer than the longest run in the content it will
  * enclose, which is what makes corruption by an embedded fence impossible.
  */
-function fenceOf(longestRun: number): string {
+export function fenceOf(longestRun: number): string {
     return '`'.repeat(Math.max(minimumFenceLength, longestRun + 1));
 }
 
