@@ -8,12 +8,32 @@ type NotificationProgress = vscode.Progress<{ message?: string; increment?: numb
 const minimumIntervalMs = 100;
 
 /**
+ * How much of the bar each phase after the Expansion owns.
+ *
+ * Measuring reads every embedded file — for its fence and its token count —
+ * before the Export's tree can be written, so it is roughly half the work
+ * that follows an Expansion and is given roughly half the bar. Leaving it out
+ * would put the bar back where this rebuild found it: motionless through the
+ * part of the run the user is actually waiting on.
+ */
+const phaseSpans: Record<'measuring' | 'rendering', { from: number; to: number }> = {
+    measuring: { from: 0, to: 0.5 },
+    rendering: { from: 0.5, to: 1 }
+};
+
+/** What the notification calls each phase. */
+const phaseVerbs: Record<'measuring' | 'rendering', string> = {
+    measuring: 'Measuring',
+    rendering: 'Rendering'
+};
+
+/**
  * Turn the counts the core reports into what the notification shows.
  *
  * The bar means one thing only: the fraction of the entries that has been
- * rendered. An Expansion cannot know its own total until it has finished, so
- * it moves the message and not the bar — a bar creeping forward against a
- * total nobody knows is a guess dressed up as progress.
+ * measured and rendered. An Expansion cannot know its own total until it has
+ * finished, so it moves the message and not the bar — a bar creeping forward
+ * against a total nobody knows is a guess dressed up as progress.
  *
  * Updates arrive once per file, which is far more often than a notification
  * can usefully change, so they are throttled. The bar tracks the fraction
@@ -45,15 +65,17 @@ export function createProgressBridge(
             return;
         }
 
+        const span = phaseSpans[update.phase];
         const total = update.total ?? update.completed;
-        const fraction = total > 0 ? update.completed / total : 1;
+        const share = total > 0 ? update.completed / total : 1;
+        const fraction = span.from + share * (span.to - span.from);
         const increment = Math.max(0, (fraction - reportedFraction) * 100);
-        reportedFraction = fraction;
+        reportedFraction = Math.max(reportedFraction, fraction);
 
         const detail = update.detail ? ` — ${update.detail}` : '';
         progress.report({
             increment,
-            message: `Rendering ${update.completed} of ${total}${detail}`
+            message: `${phaseVerbs[update.phase]} ${update.completed} of ${total}${detail}`
         });
     };
 }

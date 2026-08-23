@@ -5,8 +5,16 @@
  * them into whatever the editor shows is the adapter's job (ADR-0001).
  */
 
-/** Which half of the pipeline an update comes from. */
-export type ExportPhase = 'expansion' | 'rendering';
+/**
+ * Which part of the pipeline an update comes from.
+ *
+ * Rendering is two passes over the files and one over the document: every
+ * embedded file is measured — for the fence it needs and the tokens it costs
+ * — before the Export's tree can name what it contains, and only then is a
+ * character written. Both halves report, because a bar that sits still
+ * through the first of them is the decorative progress this rebuild removed.
+ */
+export type ExportPhase = 'expansion' | 'measuring' | 'rendering';
 
 export interface ProgressUpdate {
     phase: ExportPhase;

@@ -1,4 +1,5 @@
 import { ExpansionEntry, StubReason } from './expansion';
+import { approximateTokens } from './tokenCounting';
 
 /**
  * What the tree says beside a Stub, where it has no content to point at.
@@ -14,10 +15,21 @@ const stubAnnotations: Record<StubReason, string> = {
     'unreadable': '(omitted: unreadable)'
 };
 
+/**
+ * What the tree says beside an embedded file: what it costs to paste.
+ *
+ * A total tells the user an Export is too big; only a count per file tells
+ * them which file to drop. It sits in the same slot a Stub's reason does,
+ * and the two never compete for it — a Stub has no content and so no tokens.
+ */
+function tokenAnnotation(count: number | undefined): string | undefined {
+    return count === undefined ? undefined : `(${approximateTokens(count)})`;
+}
+
 /** Children keyed by name, in the order the entries introduced them. */
 interface TreeNode {
     children: Map<string, TreeNode>;
-    /** Set on the node an entry ends at, when that entry is a Stub. */
+    /** Set on the node an entry ends at: its Stub reason or its cost. */
     annotation?: string;
 }
 
@@ -37,8 +49,15 @@ interface TreeNode {
  * Nothing is invented. A directory appears only because an entry passes
  * through it, so the tree cannot claim a file the Export does not carry, and
  * every entry reaches a leaf, so it cannot omit one either.
+ *
+ * `tokenCounts` is keyed by relative path. A file missing from it is one that
+ * could not be read when it was measured, and it is left unannotated rather
+ * than annotated with a nought it did not earn.
  */
-export function renderFileTree(entries: ExpansionEntry[]): string {
+export function renderFileTree(
+    entries: ExpansionEntry[],
+    tokenCounts?: ReadonlyMap<string, number>
+): string {
     const root: TreeNode = { children: new Map() };
 
     for (const entry of entries) {
@@ -61,7 +80,7 @@ export function renderFileTree(entries: ExpansionEntry[]): string {
 
         node.annotation = entry.classification === 'stub'
             ? stubAnnotations[entry.reason]
-            : undefined;
+            : tokenAnnotation(tokenCounts?.get(entry.relativePath));
     }
 
     // The workspace root is drawn as `.`, so a Selection of one file still has

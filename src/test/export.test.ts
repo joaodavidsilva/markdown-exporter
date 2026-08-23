@@ -82,10 +82,10 @@ test('the Export opens with a file tree of exactly the entries it contains', asy
 
         assert.equal(treeOf(markdown), [
             '.',
-            '├── README.md',
+            '├── README.md  (~3 tokens)',
             '└── src/',
-            '    ├── index.ts',
-            '    └── util.ts'
+            '    ├── index.ts  (~2 tokens)',
+            '    └── util.ts  (~2 tokens)'
         ].join('\n'));
 
         // A file on disk that is not an entry is nowhere in the Export.
@@ -113,9 +113,9 @@ test('the tree draws nesting to whatever depth the Selection reaches', async () 
             '    ├── b/',
             '    │   ├── c/',
             '    │   │   └── d/',
-            '    │   │       └── leaf.ts',
-            '    │   └── other.ts',
-            '    └── top.ts'
+            '    │   │       └── leaf.ts  (~2 tokens)',
+            '    │   └── other.ts  (~2 tokens)',
+            '    └── top.ts  (~2 tokens)'
         ].join('\n'));
     });
 });
@@ -132,7 +132,7 @@ test('a Stub stands in the tree with the reason its content is absent', async ()
         assert.equal(treeOf(markdown), [
             '.',
             '├── src/',
-            '│   └── index.ts',
+            '│   └── index.ts  (~2 tokens)',
             '├── assets/',
             '│   └── logo.png  (omitted: binary)',
             '├── logs/',
@@ -146,7 +146,7 @@ test('a Selection of a single file still opens with its tree', async () => {
     await withWorkspace({ 'notes.md': 'text\n' }, async root => {
         const markdown = await renderToText([embedded(root, 'notes.md')]);
 
-        assert.equal(treeOf(markdown), '.\n└── notes.md');
+        assert.equal(treeOf(markdown), '.\n└── notes.md  (~2 tokens)');
     });
 });
 
@@ -171,11 +171,11 @@ test('names outside ASCII reach the tree intact', async () => {
         assert.equal(treeOf(markdown), [
             '.',
             '├── documentação/',
-            '│   └── índice.md',
+            '│   └── índice.md  (~2 tokens)',
             '├── ficheiros/',
-            '│   └── 日本語.txt',
+            '│   └── 日本語.txt  (~2 tokens)',
             '└── emoji/',
-            '    └── 🚀.md'
+            '    └── 🚀.md  (~2 tokens)'
         ].join('\n'));
     });
 });
@@ -184,7 +184,7 @@ test('a name carrying backticks widens the tree fence rather than breaking it', 
     await withWorkspace({ 'a```b.ts': 'export {};\n' }, async root => {
         const markdown = await renderToText([embedded(root, 'a```b.ts')]);
 
-        assert.equal(treeOf(markdown), '.\n└── a```b.ts');
+        assert.equal(treeOf(markdown), '.\n└── a```b.ts  (~2 tokens)');
         assert.equal(markdown.includes('## File tree\n\n````\n'), true);
     });
 });
@@ -226,7 +226,7 @@ test('the tree of a real Expansion names exactly the entries the Export carries'
         const leaves = treeOf(destination.text())
             .split('\n')
             .slice(1)
-            .map(line => line.replace(/^[^\p{L}\p{N}._]*/u, '').replace(/ {2}\(omitted: .*\)$/, ''))
+            .map(line => line.replace(/^[^\p{L}\p{N}._]*/u, '').replace(/ {2}\((omitted: |~).*\)$/, ''))
             .filter(label => !label.endsWith('/'));
 
         assert.deepEqual(
@@ -660,7 +660,10 @@ test('rendering aborted part way through stops before the remaining entries', as
                 destination,
                 signal: controller.signal,
                 onProgress: update => {
-                    if (update.completed === 1) {
+                    // Once the first entry has been *rendered*: measuring
+                    // runs first and reports too, and aborting there would
+                    // stop the Export before a word of it had been written.
+                    if (update.phase === 'rendering' && update.completed === 1) {
                         controller.abort();
                     }
                 }
@@ -703,9 +706,9 @@ test('rendering a single very large file can still be cancelled', async () => {
     });
 });
 
-test('rendering reports each entry against the total it was given', async () => {
+test('both passes report each entry against the total they were given', async () => {
     await withWorkspace({ 'a.ts': 'one\n', 'b.ts': 'two\n' }, async root => {
-        const updates: { completed: number; total?: number; detail?: string }[] = [];
+        const updates: { phase: string; completed: number; total?: number; detail?: string }[] = [];
 
         await createExport({
             entries: [
@@ -721,16 +724,27 @@ test('rendering reports each entry against the total it was given', async () => 
             configuration: resolvedConfiguration(),
             destination: createBufferedDestination(),
             onProgress: update => {
-                assert.equal(update.phase, 'rendering');
-                updates.push({ completed: update.completed, total: update.total, detail: update.detail });
+                updates.push({
+                    phase: update.phase,
+                    completed: update.completed,
+                    total: update.total,
+                    detail: update.detail
+                });
             }
         });
 
-        assert.deepEqual(updates, [
-            { completed: 1, total: 3, detail: 'a.ts' },
-            { completed: 2, total: 3, detail: 'huge.log' },
-            { completed: 3, total: 3, detail: 'b.ts' }
-        ]);
+        // Measuring reads every embedded file before the Export can name what
+        // each one costs, so it is half the work and reports like the other
+        // half. Both walk the same entries in the same order, Stubs included:
+        // an entry the measuring pass had nothing to do for is still an entry
+        // the user is waiting on.
+        const perPhase = ['measuring', 'rendering'].map(phase => [
+            { phase, completed: 1, total: 3, detail: 'a.ts' },
+            { phase, completed: 2, total: 3, detail: 'huge.log' },
+            { phase, completed: 3, total: 3, detail: 'b.ts' }
+        ]).flat();
+
+        assert.deepEqual(updates, perPhase);
     });
 });
 
