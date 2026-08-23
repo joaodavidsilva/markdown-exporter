@@ -14,6 +14,11 @@
   "contributes": {
     "commands": [
       {
+        "command": "markdownExport.copy",
+        "title": "Copy as Markdown",
+        "category": "Markdown Export"
+      },
+      {
         "command": "markdownExport.export",
         "title": "Export to Markdown",
         "category": "Markdown Export"
@@ -22,12 +27,21 @@
     "menus": {
       "explorer/context": [
         {
+          "command": "markdownExport.copy",
+          "group": "markdownExport@1",
+          "when": "true"
+        },
+        {
           "command": "markdownExport.export",
-          "group": "navigation",
+          "group": "markdownExport@2",
           "when": "true"
         }
       ],
       "commandPalette": [
+        {
+          "command": "markdownExport.copy",
+          "when": "true"
+        },
         {
           "command": "markdownExport.export",
           "when": "true"

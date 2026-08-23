@@ -5,6 +5,7 @@ A VS Code extension that exports selected files and folders to a single markdown
 ## Features
 
 - **Multi-selection support**: Export single files, multiple files, folders, or mixed selections
+- **Two destinations**: Copy the export to the clipboard, or write it to a file
 - **Automatic timestamping**: Output files automatically get timestamps to prevent overwrites
 - **Smart ignore system**: Respects .gitignore and custom ignore patterns with strict priority order
 - **Binary file handling**: Automatically detects and excludes binary files with placeholders
@@ -14,16 +15,31 @@ A VS Code extension that exports selected files and folders to a single markdown
 
 ## Usage
 
+Two commands, differing only in where the export is delivered:
+
+- **Copy as Markdown** puts the export on the clipboard and writes no file.
+  Use it when the export is going to be pasted somewhere, which is most of
+  the time.
+- **Export to Markdown** writes the export to a timestamped file in the
+  workspace root. Use it when the export is to be archived or shared.
+
+Both produce the same document, and the notification afterwards says which
+one it went to.
+
 ### Context Menu (Recommended)
 
 1. **Select files/folders** in the Explorer
-2. **Right-click** and select "Export to Markdown"
-3. The extension will export your selection to a markdown file
+2. **Right-click** and select "Copy as Markdown" or "Export to Markdown"
+3. The extension exports your selection to the clipboard or to a file
+
+Both entries sit in their own section of the context menu rather than at the
+top of it: an export is not a navigation action, and two commands crowding
+the top would be worse than the one that used to.
 
 ### Command Palette
 
 1. Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
-2. Type "Export to Markdown"
+2. Type "Copy as Markdown" or "Export to Markdown"
 3. Select the command to export the entire workspace
 
 ## Selection Behavior
@@ -43,6 +59,7 @@ All settings are available under `markdownExport.*` in VS Code settings:
 ### Output Settings
 
 - `markdownExport.outputFile`: Base output file name (default: `FULL_CODE.md`)
+  - Used by **Export to Markdown** only; **Copy as Markdown** writes no file
   - Relative to workspace root
   - Example: `docs/export.md`
   - A timestamp is ALWAYS appended; this cannot be disabled.
