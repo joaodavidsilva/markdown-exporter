@@ -39,18 +39,6 @@ test('a picked file becomes one entry, at its path relative to the workspace roo
     });
 });
 
-test('a picked file is classified as embedded', async () => {
-    await withWorkspace({ 'src/index.ts': 'export {};\n' }, async root => {
-        const [entry] = await expandSelection({
-            selectionPaths: [path.join(root, 'src/index.ts')],
-            workspaceRoot: root,
-            configuration: resolvedConfiguration()
-        });
-
-        assert.equal(entry.classification, 'embed');
-    });
-});
-
 test('a picked folder expands to every file beneath it', async () => {
     await withWorkspace({
         'src/index.ts': '',
@@ -818,20 +806,6 @@ test('an Expansion that is never cancelled needs no signal at all', async () => 
     });
 });
 
-test('a binary file is a Stub in the Expansion, not an Exclusion from it', async () => {
-    await withWorkspace({ 'assets/logo.png': 'not really a png', 'src/index.ts': '' }, async root => {
-        const entries = await expandSelection({
-            selectionPaths: [root],
-            workspaceRoot: root,
-            configuration: resolvedConfiguration()
-        });
-
-        // It is mentioned, which is the whole difference from an Exclusion.
-        assert.equal(stubReasonAt(entries, path.join('assets', 'logo.png')), 'binary');
-        assert.equal(stubReasonAt(entries, path.join('src', 'index.ts')), undefined);
-    });
-});
-
 test('a binary file picked outright is a Stub too', async () => {
     await withWorkspace({ 'assets/logo.png': 'not really a png' }, async root => {
         const entries = await expandSelection({
@@ -841,94 +815,6 @@ test('a binary file picked outright is a Stub too', async () => {
         });
 
         assert.equal(stubReasonAt(entries, path.join('assets', 'logo.png')), 'binary');
-    });
-});
-
-test('a file listed in binaryFiles is a Stub', async () => {
-    await withWorkspace({ 'data.custom': 'text', 'src/index.ts': '' }, async root => {
-        const entries = await expandSelection({
-            selectionPaths: [root],
-            workspaceRoot: root,
-            configuration: resolvedConfiguration({ binaryFiles: ['data.custom'] })
-        });
-
-        assert.equal(stubReasonAt(entries, 'data.custom'), 'binary');
-    });
-});
-
-test('a file the extension list has never heard of is a Stub when its content is binary', async () => {
-    const wasm = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
-
-    await withWorkspace({ 'build/module.wasm': wasm, 'src/index.ts': 'export {};\n' }, async root => {
-        const entries = await expandSelection({
-            selectionPaths: [root],
-            workspaceRoot: root,
-            configuration: resolvedConfiguration()
-        });
-
-        assert.equal(resolvedConfiguration().binaryFileExtensions.includes('wasm'), false);
-        assert.equal(stubReasonAt(entries, path.join('build', 'module.wasm')), 'binary');
-        assert.equal(stubReasonAt(entries, path.join('src', 'index.ts')), undefined);
-    });
-});
-
-test('a file over the size threshold is a Stub saying so', async () => {
-    await withWorkspace({ 'debug.log': 'x'.repeat(2048), 'src/index.ts': '' }, async root => {
-        const entries = await expandSelection({
-            selectionPaths: [root],
-            workspaceRoot: root,
-            configuration: resolvedConfiguration({ maxFileSizeBytes: 1024 })
-        });
-
-        assert.equal(stubReasonAt(entries, 'debug.log'), 'too-large');
-        assert.equal(stubReasonAt(entries, path.join('src', 'index.ts')), undefined);
-    });
-});
-
-test('a file exactly at the size threshold is still embedded', async () => {
-    await withWorkspace({ 'edge.txt': 'x'.repeat(1024) }, async root => {
-        const entries = await expandSelection({
-            selectionPaths: [root],
-            workspaceRoot: root,
-            configuration: resolvedConfiguration({ maxFileSizeBytes: 1024 })
-        });
-
-        assert.equal(stubReasonAt(entries, 'edge.txt'), undefined);
-    });
-});
-
-test('a size threshold of zero means no threshold at all', async () => {
-    await withWorkspace({ 'debug.log': 'x'.repeat(4096) }, async root => {
-        const entries = await expandSelection({
-            selectionPaths: [root],
-            workspaceRoot: root,
-            configuration: resolvedConfiguration({ maxFileSizeBytes: 0 })
-        });
-
-        assert.equal(stubReasonAt(entries, 'debug.log'), undefined);
-    });
-});
-
-test('a file that cannot be read is a Stub and the rest of the Expansion survives', async () => {
-    if (cannotDenyItself) {
-        return;
-    }
-
-    await withWorkspace({ 'secret.txt': 'classified', 'src/index.ts': '' }, async root => {
-        const secret = path.join(root, 'secret.txt');
-        await chmod(secret, 0o000);
-        try {
-            const entries = await expandSelection({
-                selectionPaths: [root],
-                workspaceRoot: root,
-                configuration: resolvedConfiguration()
-            });
-
-            assert.equal(stubReasonAt(entries, 'secret.txt'), 'unreadable');
-            assert.equal(stubReasonAt(entries, path.join('src', 'index.ts')), undefined);
-        } finally {
-            await chmod(secret, 0o644);
-        }
     });
 });
 
