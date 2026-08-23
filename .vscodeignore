@@ -1,12 +1,21 @@
-# Ignore source files (TS)
+# Ignore source files (TS) — bundled into out/index.js by esbuild
 src/
 
-# Ignore test files
-test/
-out/test/
+# Ignore esbuild's own build script — dev tooling, not runtime
+esbuild.js
 
-# Ignore maps (optional)
-*.map
+# out/ holds tsc's unbundled emit, kept only so `npm test` has something to
+# run against. The packaged extension needs none of it except the esbuild
+# bundle and its map. Exclude everything under out/, then re-include just
+# those two: out/** matches paths inside out/ (never the out/ entry itself),
+# so vsce still descends into it and honours the negated lines below.
+out/**
+!out/index.js
+!out/index.js.map
+
+# Dependencies are bundled into out/index.js by esbuild — none of the
+# dependency tree needs to ship.
+node_modules/
 
 # Ignore unneeded VS Code metadata
 .vscode/
@@ -24,20 +33,10 @@ lerna-debug.log*
 # Ignore OS junk
 .DS_Store
 
-# Keep production dependencies (don't exclude node_modules entirely). Remove dev-only large folders if needed:
-node_modules/**/README.md
-node_modules/**/test/
-node_modules/**/tests/
-node_modules/**/__tests__/
-node_modules/**/example/
-node_modules/**/examples/
-node_modules/**/docs/
-
 # Do NOT ignore:
-# - out/
-# - out/**/*.js
-# - out/**/*.js.map
+# - out/index.js
+# - out/index.js.map
 # - package.json
 # - README.md
 # - LICENSE
-# - Any runtime file
+# - icon.png / banner.png
