@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { ExportCancelled } from '../core/cancellation';
 import { createBufferedDestination, ExportDestination, openFileDestination } from '../core/destinations';
 import { createExport } from '../core/export';
 import { expandSelection, ExpansionEntry } from '../core/expansion';
@@ -218,5 +219,111 @@ test('an Export of a large Selection leaves the event loop free to run other wor
 
         // A synchronous pipeline would have starved the timer completely.
         assert.equal(ticks > 0, true);
+    });
+});
+
+test('rendering asked to run under an already aborted signal writes nothing', async () => {
+    await withWorkspace({ 'a.ts': 'one\n' }, async root => {
+        const controller = new AbortController();
+        controller.abort();
+        const destination = createBufferedDestination();
+
+        await assert.rejects(
+            createExport({
+                entries: [embedded(root, 'a.ts')],
+                configuration: resolvedConfiguration(),
+                destination,
+                signal: controller.signal
+            }),
+            ExportCancelled
+        );
+
+        assert.equal(destination.text(), '');
+    });
+});
+
+test('rendering aborted part way through stops before the remaining entries', async () => {
+    await withWorkspace({ 'a.ts': 'one\n', 'b.ts': 'two\n', 'c.ts': 'three\n' }, async root => {
+        const controller = new AbortController();
+        const destination = createBufferedDestination();
+
+        await assert.rejects(
+            createExport({
+                entries: ['a.ts', 'b.ts', 'c.ts'].map(name => embedded(root, name)),
+                configuration: resolvedConfiguration(),
+                destination,
+                signal: controller.signal,
+                onProgress: update => {
+                    if (update.completed === 1) {
+                        controller.abort();
+                    }
+                }
+            }),
+            ExportCancelled
+        );
+
+        assert.equal(destination.text().includes('one\n'), true);
+        assert.equal(destination.text().includes('two\n'), false);
+        assert.equal(destination.text().includes('three\n'), false);
+    });
+});
+
+test('rendering a single very large file can still be cancelled', async () => {
+    await withWorkspace({ 'big.txt': 'x'.repeat(4 * 1024 * 1024) }, async root => {
+        const controller = new AbortController();
+        const destination = createBufferedDestination();
+
+        // Abort once the first chunk of the file has reached the Destination.
+        const observed: ExportDestination = {
+            async write(chunk: string): Promise<void> {
+                await destination.write(chunk);
+                if (chunk.startsWith('xxxx')) {
+                    controller.abort();
+                }
+            }
+        };
+
+        await assert.rejects(
+            createExport({
+                entries: [embedded(root, 'big.txt')],
+                configuration: resolvedConfiguration(),
+                destination: observed,
+                signal: controller.signal
+            }),
+            ExportCancelled
+        );
+
+        assert.equal(destination.text().length < 4 * 1024 * 1024, true);
+    });
+});
+
+test('rendering reports each entry against the total it was given', async () => {
+    await withWorkspace({ 'a.ts': 'one\n', 'b.ts': 'two\n' }, async root => {
+        const updates: { completed: number; total?: number; detail?: string }[] = [];
+
+        await createExport({
+            entries: [
+                embedded(root, 'a.ts'),
+                {
+                    absolutePath: path.join(root, 'huge.log'),
+                    relativePath: 'huge.log',
+                    classification: 'stub',
+                    reason: 'too-large'
+                },
+                embedded(root, 'b.ts')
+            ],
+            configuration: resolvedConfiguration(),
+            destination: createBufferedDestination(),
+            onProgress: update => {
+                assert.equal(update.phase, 'rendering');
+                updates.push({ completed: update.completed, total: update.total, detail: update.detail });
+            }
+        });
+
+        assert.deepEqual(updates, [
+            { completed: 1, total: 3, detail: 'a.ts' },
+            { completed: 2, total: 3, detail: 'huge.log' },
+            { completed: 3, total: 3, detail: 'b.ts' }
+        ]);
     });
 });

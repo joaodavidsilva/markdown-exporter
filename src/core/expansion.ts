@@ -1,7 +1,9 @@
 import { readdir, stat } from 'node:fs/promises';
 import * as path from 'node:path';
+import { throwIfCancelled } from './cancellation';
 import { ResolvedConfiguration } from './configuration';
 import { compileExclusions, CompiledExclusions } from './exclusions';
+import { ProgressReporter } from './progress';
 
 /** Why an entry is a Stub: mentioned at its path, with its content omitted. */
 export type StubReason = 'binary' | 'too-large' | 'unreadable';
@@ -36,6 +38,10 @@ export interface ExpansionRequest {
     configuration: ResolvedConfiguration;
     /** File name this Export writes to, so it cannot include itself. */
     exportFileName?: string;
+    /** Aborts the walk between filesystem steps. */
+    signal?: AbortSignal;
+    /** Called as files are found. The total is unknown until the walk ends. */
+    onProgress?: ProgressReporter;
 }
 
 /**
@@ -44,15 +50,19 @@ export interface ExpansionRequest {
  * classifying what survives.
  */
 export async function expandSelection(request: ExpansionRequest): Promise<ExpansionEntry[]> {
-    const { selectionPaths, workspaceRoot, configuration, exportFileName } = request;
+    const { selectionPaths, workspaceRoot, configuration, exportFileName, signal } = request;
+
+    throwIfCancelled(signal);
 
     // Once per Export, not once per file: every Exclusion source is read and
     // compiled here, and the walk below only ever asks the compiled rules.
     const exclusions = await compileExclusions(workspaceRoot, configuration, exportFileName);
 
-    const filePaths: string[] = [];
+    const walk: Walk = { request, exclusions, filePaths: [] };
 
     for (const selectionPath of selectionPaths) {
+        throwIfCancelled(signal);
+
         let stats;
         try {
             stats = await stat(selectionPath);
@@ -65,37 +75,53 @@ export async function expandSelection(request: ExpansionRequest): Promise<Expans
         }
 
         if (stats.isFile()) {
-            filePaths.push(selectionPath);
+            found(walk, selectionPath);
             continue;
         }
 
-        await collectDirectory(selectionPath, exclusions, filePaths);
+        await collectDirectory(selectionPath, walk);
     }
 
-    filePaths.sort();
+    walk.filePaths.sort();
 
-    return filePaths.map(absolutePath => classify(absolutePath, workspaceRoot));
+    return walk.filePaths.map(absolutePath => classify(absolutePath, workspaceRoot));
 }
 
-async function collectDirectory(
-    directoryPath: string,
-    exclusions: CompiledExclusions,
-    filePaths: string[]
-): Promise<void> {
+/** The state one Expansion carries down through the walk. */
+interface Walk {
+    request: ExpansionRequest;
+    exclusions: CompiledExclusions;
+    filePaths: string[];
+}
+
+function found(walk: Walk, filePath: string): void {
+    walk.filePaths.push(filePath);
+    walk.request.onProgress?.({
+        phase: 'expansion',
+        completed: walk.filePaths.length,
+        detail: path.relative(walk.request.workspaceRoot, filePath)
+    });
+}
+
+async function collectDirectory(directoryPath: string, walk: Walk): Promise<void> {
+    throwIfCancelled(walk.request.signal);
+
     const items = await readdir(directoryPath);
 
     for (const item of items) {
+        throwIfCancelled(walk.request.signal);
+
         const itemPath = path.join(directoryPath, item);
 
-        if (exclusions.excludes(itemPath)) {
+        if (walk.exclusions.excludes(itemPath)) {
             continue;
         }
 
         const stats = await stat(itemPath);
         if (stats.isDirectory()) {
-            await collectDirectory(itemPath, exclusions, filePaths);
+            await collectDirectory(itemPath, walk);
         } else {
-            filePaths.push(itemPath);
+            found(walk, itemPath);
         }
     }
 }

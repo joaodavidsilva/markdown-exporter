@@ -1,10 +1,12 @@
 import { open } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { StringDecoder } from 'node:string_decoder';
+import { throwIfCancelled } from './cancellation';
 import { ResolvedConfiguration } from './configuration';
 import { ExportDestination } from './destinations';
 import { EmbeddedEntry, ExpansionEntry, StubEntry, StubReason } from './expansion';
 import { languageHintFor } from './languages';
+import { ProgressReporter } from './progress';
 
 /** How much of a file is read at a time, so no file is held whole in memory. */
 const readChunkBytes = 64 * 1024;
@@ -23,6 +25,10 @@ export interface ExportRequest {
     entries: ExpansionEntry[];
     configuration: ResolvedConfiguration;
     destination: ExportDestination;
+    /** Aborts the rendering between entries and between file chunks. */
+    signal?: AbortSignal;
+    /** Called as entries are rendered. The total is known from the outset. */
+    onProgress?: ProgressReporter;
 }
 
 /** What an Export turned out to contain. */
@@ -38,7 +44,9 @@ export interface ExportStatistics {
  * Destination as it goes rather than assembling the whole document first.
  */
 export async function createExport(request: ExportRequest): Promise<ExportStatistics> {
-    const { entries, destination } = request;
+    const { entries, destination, signal, onProgress } = request;
+
+    throwIfCancelled(signal);
 
     const statistics: ExportStatistics = {
         entryCount: entries.length,
@@ -61,7 +69,11 @@ export async function createExport(request: ExportRequest): Promise<ExportStatis
 
     await write('\n---\n\n');
 
+    let completed = 0;
+
     for (const entry of entries) {
+        throwIfCancelled(signal);
+
         await write(`## ${entry.relativePath}\n\n`);
 
         if (entry.classification === 'stub') {
@@ -69,10 +81,18 @@ export async function createExport(request: ExportRequest): Promise<ExportStatis
             await writeStub(entry, write);
         } else {
             statistics.embedCount += 1;
-            await writeEmbeddedContent(entry, write);
+            await writeEmbeddedContent(entry, write, signal);
         }
 
         await write('---\n\n');
+
+        completed += 1;
+        onProgress?.({
+            phase: 'rendering',
+            completed,
+            total: entries.length,
+            detail: entry.relativePath
+        });
     }
 
     return statistics;
@@ -88,7 +108,8 @@ async function writeStub(entry: StubEntry, write: (chunk: string) => Promise<voi
  */
 async function writeEmbeddedContent(
     entry: EmbeddedEntry,
-    write: (chunk: string) => Promise<void>
+    write: (chunk: string) => Promise<void>,
+    signal?: AbortSignal
 ): Promise<void> {
     let handle: FileHandle;
     try {
@@ -115,6 +136,10 @@ async function writeEmbeddedContent(
         await write(`\`\`\`${languageHintFor(entry.absolutePath)}\n`);
 
         while (bytesRead > 0) {
+            // Between chunks as well as between entries, so that a single
+            // very large file can still be cancelled.
+            throwIfCancelled(signal);
+
             const text = decoder.write(buffer.subarray(0, bytesRead));
             if (text.length > 0) {
                 await write(text);

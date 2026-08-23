@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import { chmod } from 'node:fs/promises';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { ExportCancelled } from '../core/cancellation';
 import { createBufferedDestination } from '../core/destinations';
 import { createExport } from '../core/export';
 import { expandSelection } from '../core/expansion';
@@ -276,5 +277,88 @@ test('the Exclusion sources are read once per Export, not once per file', async 
         // unmistakable: 251 files across 25 directories.
         assert.equal(result.length, 251);
         assert.equal(reads, 1);
+    });
+});
+
+test('an Expansion asked to run under an already aborted signal does not run', async () => {
+    await withWorkspace({ 'src/index.ts': '' }, async root => {
+        const controller = new AbortController();
+        controller.abort();
+
+        await assert.rejects(
+            expandSelection({
+                selectionPaths: [root],
+                workspaceRoot: root,
+                configuration: resolvedConfiguration(),
+                signal: controller.signal
+            }),
+            ExportCancelled
+        );
+    });
+});
+
+test('an Expansion aborted part way through stops walking', async () => {
+    const files: Record<string, string> = {};
+    for (let index = 0; index < 400; index += 1) {
+        files[`src/module-${index % 20}/file-${index}.ts`] = '';
+    }
+
+    await withWorkspace(files, async root => {
+        const controller = new AbortController();
+        let found = 0;
+
+        await assert.rejects(
+            expandSelection({
+                selectionPaths: [root],
+                workspaceRoot: root,
+                configuration: resolvedConfiguration(),
+                signal: controller.signal,
+                onProgress: () => {
+                    found += 1;
+                    if (found === 10) {
+                        controller.abort();
+                    }
+                }
+            }),
+            ExportCancelled
+        );
+
+        // It stopped near where it was told to, rather than finishing the walk.
+        assert.equal(found < 400, true);
+    });
+});
+
+test('an Expansion reports a growing count of the files it has found', async () => {
+    await withWorkspace({
+        'src/a.ts': '',
+        'src/deep/b.ts': '',
+        'src/deep/c.ts': ''
+    }, async root => {
+        const counts: number[] = [];
+
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration(),
+            onProgress: update => {
+                assert.equal(update.phase, 'expansion');
+                counts.push(update.completed);
+            }
+        });
+
+        assert.deepEqual(counts, [1, 2, 3]);
+        assert.equal(counts[counts.length - 1], entries.length);
+    });
+});
+
+test('an Expansion that is never cancelled needs no signal at all', async () => {
+    await withWorkspace({ 'src/index.ts': '' }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(relativePaths(entries), [path.join('src', 'index.ts')]);
     });
 });
