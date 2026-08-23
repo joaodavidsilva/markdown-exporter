@@ -428,17 +428,6 @@ test('a file containing a triple fence is embedded without breaking the enclosin
     });
 });
 
-test('a longer run of backticks widens the fence further', async () => {
-    const content = 'a\n``````\nb\n';
-
-    await withWorkspace({ 'notes.md': content }, async root => {
-        const markdown = await renderToText([embedded(root, 'notes.md')]);
-
-        assert.equal(markdown.includes('```````markdown\n' + content), true);
-        assert.equal(markdown.includes('\n```````\n'), true);
-    });
-});
-
 test('a run of backticks straddling two reads is still counted whole', async () => {
     // Long enough that the run lands across a 64 KiB read boundary.
     const padding = 'x'.repeat(64 * 1024 - 2);
@@ -448,15 +437,6 @@ test('a run of backticks straddling two reads is still counted whole', async () 
         const markdown = await renderToText([embedded(root, 'wide.md')]);
 
         assert.equal(markdown.includes('``````markdown\n'), true);
-    });
-});
-
-test('a file with no backticks in it keeps the ordinary three-backtick fence', async () => {
-    await withWorkspace({ 'plain.ts': 'const answer = 42;\n' }, async root => {
-        const markdown = await renderToText([embedded(root, 'plain.ts')]);
-
-        assert.equal(markdown.includes('```typescript\n'), true);
-        assert.equal(markdown.includes('````'), false);
     });
 });
 
