@@ -59,12 +59,14 @@ All settings are available under `markdownExport.*` in VS Code settings:
 
 ### Ignore Settings
 
+An ignored file appears nowhere in the export: the export gives no sign it
+existed. That is different from a stub — see **Stub Settings** below.
+
 #### Priority Order (Strict)
-1. `.gitignore` patterns (highest priority)
-2. `markdownExport.additionalIgnore` (exact relative paths)
-3. Output file itself (base and current timestamped version automatically ignored for the run)
-4. `markdownExport.binaryFiles` (exact relative paths)
-5. `markdownExport.binaryFileExtensions` (extension-based)
+1. `.git/` (built in, not configurable)
+2. `.gitignore` patterns
+3. `markdownExport.additionalIgnore` (exact relative paths)
+4. Output file itself (base and current timestamped version automatically ignored for the run)
 
 #### Settings
 
@@ -77,6 +79,17 @@ All settings are available under `markdownExport.*` in VS Code settings:
     ".env"
   ]
   ```
+
+### Stub Settings
+
+A stub is a file the export mentions at its path, with its content
+deliberately omitted and the reason stated. Unlike an ignored file, you can
+still see that it is there. There are three reasons a file becomes a stub.
+
+**Binary.** Either its extension is on the configured list, or a null byte
+appears in its first 8 KB. The content check is what catches the extensions
+nobody listed — `.wasm`, `.pyc`, `.class`, `.db` — which would otherwise be
+decoded as UTF-8 and embedded as noise.
 
 - `markdownExport.binaryFiles`: Array of exact file paths to treat as binary
   ```json
@@ -97,6 +110,23 @@ All settings are available under `markdownExport.*` in VS Code settings:
   ]
   ```
 
+**Too large.** Over the configured byte threshold, so that one large log file
+cannot consume the whole export.
+
+- `markdownExport.maxFileSizeBytes`: Size above which a file becomes a stub
+  (default: `1048576`, one megabyte). Zero means no limit.
+  ```json
+  "markdownExport.maxFileSizeBytes": 1048576
+  ```
+
+**Unreadable.** The file could not be read — a permission error, or a symlink
+pointing nowhere. One unreadable file no longer costs you the whole export. A
+directory that cannot be read is stubbed the same way, so the rest of the
+selection is still exported.
+
+Symlinked directories are never followed, so a circular link terminates
+instead of hanging the export.
+
 ### Default Binary Extensions
 
 The extension includes these default binary extensions:
@@ -112,7 +142,7 @@ The generated markdown file includes:
 
 1. **Index section**: Links to all exported files
 2. **File sections**: Each file with proper syntax highlighting
-3. **Binary placeholders**: For binary files with descriptive message
+3. **Stubs**: Files mentioned at their path with their content omitted and the reason stated
 
 ### Example Output
 
@@ -148,7 +178,7 @@ import * as vscode from 'vscode';
 
 ## assets/logo.png
 
-This is a binary or unsupported file type. Content not included.
+> **Content omitted** — this file is binary.
 
 ---
 ```
