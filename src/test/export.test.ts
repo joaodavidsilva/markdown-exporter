@@ -78,6 +78,103 @@ test('a file whose extension has no known language gets a fence with no hint', a
     });
 });
 
+test('extensions the map used to miss now carry their language hint', async () => {
+    const cases: [string, string][] = [
+        ['bundle.mjs', 'javascript'],
+        ['types.mts', 'typescript'],
+        ['main.dart', 'dart'],
+        ['app.lua', 'lua'],
+        ['worker.ex', 'elixir'],
+        ['Deploy.tf', 'hcl'],
+        ['schema.graphql', 'graphql'],
+        ['service.proto', 'protobuf'],
+        ['build.gradle', 'groovy'],
+        ['flake.nix', 'nix'],
+        ['fix.patch', 'diff'],
+        ['guide.rst', 'restructuredtext']
+    ];
+
+    const files: Record<string, string> = {};
+    for (const [name] of cases) {
+        files[name] = 'x\n';
+    }
+
+    await withWorkspace(files, async root => {
+        const markdown = await renderToText(cases.map(([name]) => embedded(root, name)));
+
+        for (const [name, hint] of cases) {
+            assert.equal(markdown.includes(`\`\`\`${hint}\nx\n`), true, name);
+        }
+    });
+});
+
+test('a file with no extension but a well-known name gets a language hint', async () => {
+    const cases: [string, string][] = [
+        ['Dockerfile', 'dockerfile'],
+        ['Makefile', 'makefile'],
+        ['Gemfile', 'ruby'],
+        ['Jenkinsfile', 'groovy'],
+        ['.gitignore', 'gitignore'],
+        ['.bashrc', 'bash'],
+        ['.editorconfig', 'ini']
+    ];
+
+    const files: Record<string, string> = {};
+    for (const [name] of cases) {
+        files[name] = 'x\n';
+    }
+
+    await withWorkspace(files, async root => {
+        const markdown = await renderToText(cases.map(([name]) => embedded(root, name)));
+
+        for (const [name, hint] of cases) {
+            assert.equal(markdown.includes(`\`\`\`${hint}\nx\n`), true, name);
+        }
+    });
+});
+
+test('a well-known name wins over an extension that describes it worse', async () => {
+    await withWorkspace({ 'CMakeLists.txt': 'project(x)\n' }, async root => {
+        const markdown = await renderToText([embedded(root, 'CMakeLists.txt')]);
+
+        assert.equal(markdown.includes('```cmake\nproject(x)\n'), true);
+    });
+});
+
+test('the named families are recognised past their first member', async () => {
+    await withWorkspace({
+        'Dockerfile.builder': 'FROM scratch\n',
+        'api.dockerfile': 'FROM scratch\n',
+        '.env.production': 'KEY=value\n'
+    }, async root => {
+        const markdown = await renderToText([
+            embedded(root, 'Dockerfile.builder'),
+            embedded(root, 'api.dockerfile'),
+            embedded(root, '.env.production')
+        ]);
+
+        assert.equal(markdown.match(/```dockerfile\nFROM scratch\n/g)?.length, 2);
+        assert.equal(markdown.includes('```dotenv\nKEY=value\n'), true);
+    });
+});
+
+test('a file with no extension and no known identity gets no language hint', async () => {
+    await withWorkspace({ 'NOTICE': 'plain\n' }, async root => {
+        const markdown = await renderToText([embedded(root, 'NOTICE')]);
+
+        assert.equal(markdown.includes('```\nplain\n```'), true);
+        assert.equal(/```[a-z]/.test(markdown), false);
+    });
+});
+
+test('an extension that means more than one language gets no hint rather than a guess', async () => {
+    await withWorkspace({ 'solver.m': 'x = 1;\n' }, async root => {
+        const markdown = await renderToText([embedded(root, 'solver.m')]);
+
+        assert.equal(markdown.includes('```\nx = 1;\n```'), true);
+    });
+});
+
 test('a file containing a triple fence is embedded without breaking the enclosing block', async () => {
     const content = 'Before\n\n```js\nconst answer = 42;\n```\n\nAfter\n';
 
