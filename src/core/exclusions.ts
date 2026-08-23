@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { isBinaryFile } from './binaryDetection';
+import { hasBinaryExtension } from './binaryDetection';
 import { ResolvedConfiguration } from './configuration';
 import { createGitignoreFilter } from './gitignore';
 
@@ -99,7 +99,7 @@ export async function compileExclusions(
                 return true;
             }
 
-            if (isBinaryFile(absolutePath, configuration.binaryFileExtensions)) {
+            if (hasBinaryExtension(absolutePath, configuration.binaryFileExtensions)) {
                 return true;
             }
 
