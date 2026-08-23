@@ -19,49 +19,78 @@ function isSuppressed(relativePath: string): boolean {
 }
 
 /**
- * Whether an Exclusion removes this path, so that it appears nowhere in the
- * Export.
+ * The Exclusion rules of one Export, already read from disk and compiled.
+ *
+ * Deciding an Exclusion must not touch the filesystem: the sources are read
+ * once per Export, by `compileExclusions`, and every path is then answered
+ * from memory. Reading them per file is what made Export time grow with the
+ * square of the repository size.
+ */
+export interface CompiledExclusions {
+    /** Whether an Exclusion removes this path from the Expansion. */
+    excludes(absolutePath: string): boolean;
+}
+
+/**
+ * Read every Exclusion source once and compile them into a single decision.
  *
  * The in-flight Export's own file travels in as `exportFileName` rather than
  * living in module state, so an Export never contains a previous one and two
  * Exports cannot collide.
  */
-export async function isExcluded(
-    filePath: string,
+export async function compileExclusions(
     workspaceRoot: string,
     configuration: ResolvedConfiguration,
     exportFileName?: string
-): Promise<boolean> {
-    const relativePath = path.relative(workspaceRoot, filePath);
-
-    if (isSuppressed(relativePath)) {
-        return true;
-    }
-
+): Promise<CompiledExclusions> {
     const isGitignored = await createGitignoreFilter(workspaceRoot);
-    if (isGitignored(filePath)) {
-        return true;
-    }
 
-    if (configuration.additionalIgnore.includes(relativePath)) {
-        return true;
-    }
+    const additionalIgnore = new Set(configuration.additionalIgnore);
+    const binaryFiles = new Set(configuration.binaryFiles);
+    const outputFilePath = path.join(workspaceRoot, configuration.outputFile);
+    const exportFilePath = exportFileName
+        ? path.join(workspaceRoot, exportFileName)
+        : undefined;
 
-    if (filePath === path.join(workspaceRoot, configuration.outputFile)) {
-        return true;
-    }
+    return {
+        excludes(absolutePath: string): boolean {
+            const relativePath = path.relative(workspaceRoot, absolutePath);
 
-    if (exportFileName && filePath === path.join(workspaceRoot, exportFileName)) {
-        return true;
-    }
+            // The workspace root itself is the ground the rules are relative
+            // to, never a candidate for Exclusion.
+            if (relativePath === '') {
+                return false;
+            }
 
-    if (configuration.binaryFiles.includes(relativePath)) {
-        return true;
-    }
+            if (isSuppressed(relativePath)) {
+                return true;
+            }
 
-    if (isBinaryFile(filePath, configuration.binaryFileExtensions)) {
-        return true;
-    }
+            if (isGitignored(absolutePath)) {
+                return true;
+            }
 
-    return false;
+            if (additionalIgnore.has(relativePath)) {
+                return true;
+            }
+
+            if (absolutePath === outputFilePath) {
+                return true;
+            }
+
+            if (exportFilePath && absolutePath === exportFilePath) {
+                return true;
+            }
+
+            if (binaryFiles.has(relativePath)) {
+                return true;
+            }
+
+            if (isBinaryFile(absolutePath, configuration.binaryFileExtensions)) {
+                return true;
+            }
+
+            return false;
+        }
+    };
 }

@@ -2,8 +2,10 @@ import * as assert from 'node:assert/strict';
 import { chmod } from 'node:fs/promises';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { createBufferedDestination } from '../core/destinations';
+import { createExport } from '../core/export';
 import { expandSelection } from '../core/expansion';
-import { resolvedConfiguration, withWorkspace } from './workspace';
+import { countingExclusionSourceReads, resolvedConfiguration, withWorkspace } from './workspace';
 
 function relativePaths(entries: { relativePath: string }[]): string[] {
     return entries.map(entry => entry.relativePath);
@@ -245,5 +247,34 @@ test('.git is not walked at all, not merely filtered out of the entries', async 
         } finally {
             await chmod(gitDirectory, 0o755);
         }
+    });
+});
+
+test('the Exclusion sources are read once per Export, not once per file', async () => {
+    const files: Record<string, string> = { '.gitignore': '*.log\n' };
+    for (let index = 0; index < 250; index += 1) {
+        files[`src/module-${index % 25}/file-${index}.ts`] = `export const v = ${index};\n`;
+    }
+
+    await withWorkspace(files, async root => {
+        const { result, reads } = await countingExclusionSourceReads(async () => {
+            const entries = await expandSelection({
+                selectionPaths: [root],
+                workspaceRoot: root,
+                configuration: resolvedConfiguration(),
+                exportFileName: 'EXPORT.md'
+            });
+            await createExport({
+                entries,
+                configuration: resolvedConfiguration(),
+                destination: createBufferedDestination()
+            });
+            return entries;
+        });
+
+        // The tree is large enough that a read per file visited would be
+        // unmistakable: 251 files across 25 directories.
+        assert.equal(result.length, 251);
+        assert.equal(reads, 1);
     });
 });

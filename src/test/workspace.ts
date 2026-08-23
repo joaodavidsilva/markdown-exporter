@@ -50,3 +50,42 @@ export function resolvedConfiguration(
         ...overrides
     };
 }
+
+/**
+ * The files on disk that supply Exclusion rules. `.exportignore` and nested
+ * `.gitignore` files join this list later; counting by name keeps the helper
+ * honest when they do.
+ */
+const exclusionSourceNames = new Set(['.gitignore']);
+
+/**
+ * Count real reads of the Exclusion sources while `run` executes.
+ *
+ * The filesystem is not mocked: every read still goes to the real temporary
+ * directory and returns the real bytes. `readFile` is only wrapped on the way
+ * through, so what is counted is how many times the file was actually read —
+ * not which function happened to be called.
+ */
+export async function countingExclusionSourceReads<T>(
+    run: () => Promise<T>
+): Promise<{ result: T; reads: number }> {
+    const module = fs as unknown as {
+        readFile: (...args: unknown[]) => Promise<unknown>;
+    };
+    const originalReadFile = module.readFile;
+    let reads = 0;
+
+    module.readFile = (...args: unknown[]) => {
+        const [target] = args;
+        if (typeof target === 'string' && exclusionSourceNames.has(path.basename(target))) {
+            reads += 1;
+        }
+        return originalReadFile(...args);
+    };
+
+    try {
+        return { result: await run(), reads };
+    } finally {
+        module.readFile = originalReadFile;
+    }
+}

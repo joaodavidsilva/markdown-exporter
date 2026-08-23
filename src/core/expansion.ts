@@ -1,7 +1,7 @@
 import { readdir, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { ResolvedConfiguration } from './configuration';
-import { isExcluded } from './exclusions';
+import { compileExclusions, CompiledExclusions } from './exclusions';
 
 /** Why an entry is a Stub: mentioned at its path, with its content omitted. */
 export type StubReason = 'binary' | 'too-large' | 'unreadable';
@@ -45,6 +45,11 @@ export interface ExpansionRequest {
  */
 export async function expandSelection(request: ExpansionRequest): Promise<ExpansionEntry[]> {
     const { selectionPaths, workspaceRoot, configuration, exportFileName } = request;
+
+    // Once per Export, not once per file: every Exclusion source is read and
+    // compiled here, and the walk below only ever asks the compiled rules.
+    const exclusions = await compileExclusions(workspaceRoot, configuration, exportFileName);
+
     const filePaths: string[] = [];
 
     for (const selectionPath of selectionPaths) {
@@ -55,14 +60,16 @@ export async function expandSelection(request: ExpansionRequest): Promise<Expans
             continue;
         }
 
-        if (stats.isFile()) {
-            if (!(await isExcluded(selectionPath, workspaceRoot, configuration, exportFileName))) {
-                filePaths.push(selectionPath);
-            }
+        if (exclusions.excludes(selectionPath)) {
             continue;
         }
 
-        await collectDirectory(selectionPath, request, filePaths);
+        if (stats.isFile()) {
+            filePaths.push(selectionPath);
+            continue;
+        }
+
+        await collectDirectory(selectionPath, exclusions, filePaths);
     }
 
     filePaths.sort();
@@ -72,22 +79,21 @@ export async function expandSelection(request: ExpansionRequest): Promise<Expans
 
 async function collectDirectory(
     directoryPath: string,
-    request: ExpansionRequest,
+    exclusions: CompiledExclusions,
     filePaths: string[]
 ): Promise<void> {
-    const { workspaceRoot, configuration, exportFileName } = request;
     const items = await readdir(directoryPath);
 
     for (const item of items) {
         const itemPath = path.join(directoryPath, item);
 
-        if (await isExcluded(itemPath, workspaceRoot, configuration, exportFileName)) {
+        if (exclusions.excludes(itemPath)) {
             continue;
         }
 
         const stats = await stat(itemPath);
         if (stats.isDirectory()) {
-            await collectDirectory(itemPath, request, filePaths);
+            await collectDirectory(itemPath, exclusions, filePaths);
         } else {
             filePaths.push(itemPath);
         }
