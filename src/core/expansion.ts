@@ -80,21 +80,25 @@ export async function expandSelection(request: ExpansionRequest): Promise<Expans
             continue;
         }
 
+        // A path picked in the explorer beats every Exclusion rule that would
+        // have removed it, because picking it is what the user said and a rule
+        // is only what they said by default. Only what the tool suppresses of
+        // its own authority survives the pick.
+        //
+        // The override stops at the picked path itself. Everything the walk
+        // finds underneath is judged normally — without that half, picking the
+        // project root would drag in the whole of what the rules exist to keep
+        // out.
+        if (exclusions.suppresses(selectionPath)) {
+            continue;
+        }
+
         if (stats.isFile()) {
-            if (!exclusions.excludes(selectionPath)) {
-                record(walk, { absolutePath: selectionPath, sizeBytes: stats.size });
-            }
+            record(walk, { absolutePath: selectionPath, sizeBytes: stats.size });
             continue;
         }
 
         if (!stats.isDirectory()) {
-            continue;
-        }
-
-        // Only the built-in suppression is consulted for a picked folder: what
-        // the user's own Exclusion rules do to a directory they picked
-        // outright is a question this ticket deliberately leaves open.
-        if (exclusions.suppresses(selectionPath)) {
             continue;
         }
 

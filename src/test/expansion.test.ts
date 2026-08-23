@@ -406,6 +406,98 @@ test('the file this Export writes to is never part of it', async () => {
     });
 });
 
+test('a file picked outright is exported even though a .gitignore rule matches it', async () => {
+    await withWorkspace({ '.gitignore': '*.log\n', 'debug.log': 'the log\n' }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [path.join(root, 'debug.log')],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(relativePaths(entries), ['debug.log']);
+    });
+});
+
+test('a file picked outright beats the .exportignore and the additionalIgnore setting too', async () => {
+    await withWorkspace({ '.exportignore': 'notes.md\n', 'notes.md': '', 'dist/bundle.js': '' }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [path.join(root, 'notes.md'), path.join(root, 'dist/bundle.js')],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration({ additionalIgnore: ['dist'] })
+        });
+
+        assert.deepEqual(relativePaths(entries), [path.join('dist', 'bundle.js'), 'notes.md']);
+    });
+});
+
+test('a folder picked outright is walked, and what is inside it is still judged', async () => {
+    await withWorkspace({
+        '.gitignore': 'out/*.map\n',
+        'out/bundle.js': '',
+        'out/bundle.js.map': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [path.join(root, 'out')],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(relativePaths(entries), [path.join('out', 'bundle.js')]);
+    });
+});
+
+test('picking a folder a rule excludes whole brings nothing out of it', async () => {
+    await withWorkspace({
+        '.gitignore': 'node_modules/\n',
+        'node_modules/left-pad/index.js': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [path.join(root, 'node_modules')],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        // The pick clears the folder itself, and every file beneath it is
+        // judged as the walk finds it — a rule that took out the folder took
+        // out its contents with it, exactly as git reads the same rule.
+        assert.deepEqual(entries, []);
+    });
+});
+
+test('an ignored file inside a picked folder is still excluded', async () => {
+    await withWorkspace({
+        '.gitignore': '*.log\n',
+        'src/debug.log': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [path.join(root, 'src')],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        // The pick reaches the folder and stops there. Otherwise picking the
+        // project root would drag in everything the rules keep out.
+        assert.deepEqual(relativePaths(entries), [path.join('src', 'index.ts')]);
+    });
+});
+
+test('picking a folder does not re-include the ignored folders inside it', async () => {
+    await withWorkspace({
+        '.gitignore': 'node_modules/\n',
+        'node_modules/left-pad/index.js': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(relativePaths(entries), ['.gitignore', path.join('src', 'index.ts')]);
+    });
+});
+
 test('.git is never part of an Expansion, with no .gitignore present', async () => {
     await withWorkspace({
         '.git/HEAD': 'ref: refs/heads/main\n',
@@ -463,6 +555,20 @@ test('a picked .git is suppressed, since the suppression is not configurable', a
         });
 
         assert.deepEqual(entries, []);
+    });
+});
+
+test('a file inside .git picked outright is suppressed all the same', async () => {
+    await withWorkspace({ '.git/HEAD': 'ref: refs/heads/main\n', 'src/index.ts': '' }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [path.join(root, '.git/HEAD'), path.join(root, 'src/index.ts')],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        // The suppression is the tool's own and answers to nobody: picking a
+        // path is the last word over the user's rules, not over this one.
+        assert.deepEqual(relativePaths(entries), [path.join('src', 'index.ts')]);
     });
 });
 
