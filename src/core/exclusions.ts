@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { ResolvedConfiguration } from './configuration';
+import { isExportFileName } from './exportNaming';
 import { createGitignoreChain } from './gitignore';
 import { compileIgnoreRules, IgnoreVerdict, readIgnoreRules } from './ignoreRules';
 
@@ -104,12 +105,36 @@ export async function compileExclusions(
         ? path.join(workspaceRoot, exportFileName)
         : undefined;
 
-    /** A file this extension wrote, or is about to write, as an Export. */
-    const isOwnExport = (absolutePath: string): boolean => {
+    /**
+     * A file this extension wrote, or is about to write, as an Export.
+     *
+     * Excluding the configured name alone was never enough: what a file
+     * Destination actually writes always carries a timestamp, so no Export
+     * that had ever been written was excluded from the next one and each run
+     * embedded all of its predecessors.
+     *
+     * What is recognised is the shape the extension itself writes — the
+     * configured base name, a timestamp, the configured extension — and only
+     * in the workspace root, which is the only place a file Destination ever
+     * writes. Anything wider would be guessing: the output name is
+     * configurable, and a user's own `FULL_CODE_notes.md`, or their
+     * `archive/FULL_CODE_2026-08-22_10-00-00.md`, is a file they wrote and
+     * belongs in their Export.
+     */
+    const isOwnExport = (absolutePath: string, relativePath: string): boolean => {
         if (absolutePath === outputFilePath) {
             return true;
         }
-        return exportFilePath !== undefined && absolutePath === exportFilePath;
+
+        if (exportFilePath !== undefined && absolutePath === exportFilePath) {
+            return true;
+        }
+
+        if (path.dirname(relativePath) !== '.') {
+            return false;
+        }
+
+        return isExportFileName(path.basename(relativePath), configuration.outputFile);
     };
 
     const suppresses = (absolutePath: string): boolean => {
@@ -117,7 +142,7 @@ export async function compileExclusions(
         if (relativePath === '') {
             return false;
         }
-        return isSuppressed(relativePath) || isOwnExport(absolutePath);
+        return isSuppressed(relativePath) || isOwnExport(absolutePath, relativePath);
     };
 
     /**

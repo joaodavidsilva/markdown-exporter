@@ -7,7 +7,7 @@ A VS Code extension that exports selected files and folders to a single markdown
 - **Multi-selection support**: Export single files, multiple files, folders, or mixed selections
 - **Two destinations**: Copy the export to the clipboard, or write it to a file
 - **Automatic timestamping**: Output files automatically get timestamps to prevent overwrites
-- **Smart ignore system**: Respects .gitignore and custom ignore patterns with strict priority order
+- **Smart ignore system**: Respects nested .gitignore files, an .exportignore of your own, and glob patterns from settings, in a strict priority order
 - **Binary file handling**: Automatically detects and excludes binary files with placeholders
 - **Clean architecture**: Well-organized codebase with proper separation of concerns
 - **Configurable**: Extensive configuration options for all aspects of export
@@ -80,20 +80,74 @@ An ignored file appears nowhere in the export: the export gives no sign it
 existed. That is different from a stub — see **Stub Settings** below.
 
 #### Priority Order (Strict)
-1. `.git/` (built in, not configurable)
-2. `.gitignore` patterns
-3. `markdownExport.additionalIgnore` (exact relative paths)
-4. Output file itself (base and current timestamped version automatically ignored for the run)
+
+In increasing precedence — the last source with something to say about a path
+decides:
+
+1. Every `.gitignore` from the workspace root down to the file's own directory,
+   with git's own semantics for nesting and negation: a `.gitignore` governs
+   its directory and everything beneath it, its patterns are relative to where
+   it sits, and the deepest one with an opinion wins
+2. `.exportignore` at the workspace root, in the same syntax
+3. `markdownExport.additionalIgnore`
+
+Two rules stand outside that order, because they are the tool's own rather than
+yours. They cannot be configured off, and — unlike everything above — picking
+the path in the explorer does not override them:
+
+- `.git/` is never walked
+- an export this extension wrote is never inside a later one
+
+#### Explicit picks win
+
+A file you picked in the explorer is exported even when an ignore rule matches
+it: picking it is what you said, and a rule is only what you said by default.
+
+The override stops at what you picked. A file the walk discovers *inside* a
+folder you picked is still judged normally — otherwise picking the project root
+would drag in everything the rules exist to keep out.
+
+#### `.exportignore`
+
+Put an `.exportignore` in the repository root for ignore rules that belong to
+exporting rather than to git. Same syntax as a `.gitignore`, negations
+included, and it is read after the `.gitignore` files, so it can both take out
+what git kept and keep what git took out.
+
+```gitignore
+# Exclude from exports, though git tracks them
+**/*.snap
+docs/generated/
+
+# Export this one, though .gitignore excludes it
+!fixtures/example.log
+```
+
+#### Never exporting a previous export
+
+**Export to Markdown** writes a timestamped file, so excluding the configured
+`outputFile` name alone left every export it had ever written free to appear in
+the next one — and each run made the next one bigger.
+
+A file in the workspace root is recognised as a previous export when its name
+is exactly the shape the extension writes: the configured base name, a
+timestamp, the configured extension. That is the narrowest rule that catches
+them. Your own `FULL_CODE_notes.md`, or an `archive/FULL_CODE_2026-08-22_10-00-00.md`
+outside the workspace root, is a file you wrote and stays in your export.
 
 #### Settings
 
-- `markdownExport.additionalIgnore`: Array of exact relative paths to ignore
+- `markdownExport.additionalIgnore`: Array of paths and glob patterns to ignore,
+  in `.gitignore` syntax. An entry with no glob character in it is an exact path
+  relative to the workspace root — exactly what it meant before patterns were
+  accepted — so upgrading does not change what your exports contain.
   ```json
   "markdownExport.additionalIgnore": [
     "node_modules",
     "dist",
     "build",
-    ".env"
+    ".env",
+    "**/*.snap"
   ]
   ```
 

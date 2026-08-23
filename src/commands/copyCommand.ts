@@ -7,9 +7,11 @@ import { ChosenDestination, runExportCommand } from './runExport';
  * of it: most Exports are only ever pasted somewhere, and the ones written to
  * the workspace had to be deleted afterwards.
  *
- * No file means no `exportFileName`: there is no in-flight Export for the
- * Expansion to leave out. The configured output file is excluded either way,
- * so a copied Export still never contains a previous one.
+ * No file means no `exportFileName`: this command writes nothing, so there is
+ * no in-flight Export for the Expansion to leave out. Exports written by
+ * earlier runs of the file command are left out all the same — the Expansion
+ * recognises them by the shape a file Destination writes, not by the name the
+ * Export it is producing happens to have.
  */
 function toClipboard(): ChosenDestination {
     return {

@@ -393,6 +393,88 @@ test('a previous Export at the configured output file is never part of a new one
     });
 });
 
+test('an Export written by an earlier run is never part of a new one', async () => {
+    await withWorkspace({
+        'FULL_CODE.md': '# Project Code Export\n',
+        'FULL_CODE_2026-08-22_10-00-00.md': '# Project Code Export\n',
+        'code.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration(),
+            exportFileName: 'FULL_CODE_2026-08-23_11-00-00.md'
+        });
+
+        // The configured name was already excluded; the file a file
+        // Destination actually writes carries a timestamp, and used to come
+        // back into every later Export.
+        assert.deepEqual(relativePaths(entries), ['code.ts']);
+    });
+});
+
+test('an Export written by an earlier run is recognised under a configured output name', async () => {
+    await withWorkspace({
+        'dump_2026-08-22_10-00-00.txt': '',
+        'FULL_CODE_2026-08-22_10-00-00.md': '',
+        'code.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration({ outputFile: 'dump.txt' })
+        });
+
+        // Only the shape this configuration writes. The `.md` file was
+        // written by some other configuration, or by hand, and is the user's.
+        assert.deepEqual(relativePaths(entries), ['FULL_CODE_2026-08-22_10-00-00.md', 'code.ts']);
+    });
+});
+
+test('a file of the user that merely resembles an Export is exported', async () => {
+    await withWorkspace({
+        'FULL_CODE_notes.md': '',
+        'FULL_CODE_2026-08-22.md': '',
+        'FULL_CODE_v2.md': '',
+        'FULL_CODE_2026-08-22_10-00-00.txt': '',
+        'archive/FULL_CODE_2026-08-22_10-00-00.md': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        // The recognition is the narrowest that catches what the extension
+        // writes: the full shape, and only in the workspace root.
+        assert.deepEqual(relativePaths(entries), [
+            'FULL_CODE_2026-08-22.md',
+            'FULL_CODE_2026-08-22_10-00-00.txt',
+            'FULL_CODE_notes.md',
+            'FULL_CODE_v2.md',
+            path.join('archive', 'FULL_CODE_2026-08-22_10-00-00.md')
+        ]);
+    });
+});
+
+test('a previous Export picked outright is still left out', async () => {
+    await withWorkspace({ 'FULL_CODE_2026-08-22_10-00-00.md': '', 'code.ts': '' }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [
+                path.join(root, 'FULL_CODE_2026-08-22_10-00-00.md'),
+                path.join(root, 'code.ts')
+            ],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        // An Export is never inside an Export. Like the .git suppression this
+        // is the tool's own rule rather than one of the user's, so picking the
+        // file does not override it.
+        assert.deepEqual(relativePaths(entries), ['code.ts']);
+    });
+});
+
 test('the file this Export writes to is never part of it', async () => {
     await withWorkspace({ 'FULL_CODE_2026-01-01_00-00-00.md': '', 'src/index.ts': '' }, async root => {
         const entries = await expandSelection({
