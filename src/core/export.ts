@@ -1,7 +1,7 @@
 import { open } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { StringDecoder } from 'node:string_decoder';
-import { throwIfCancelled } from './cancellation';
+import { ExportCancelled, throwIfCancelled } from './cancellation';
 import { ResolvedConfiguration } from './configuration';
 import { ExportDestination } from './destinations';
 import { EmbeddedEntry, ExpansionEntry, StubEntry, StubReason } from './expansion';
@@ -10,6 +10,10 @@ import { ProgressReporter } from './progress';
 
 /** How much of a file is read at a time, so no file is held whole in memory. */
 const readChunkBytes = 64 * 1024;
+
+/** The byte a fence is made of, and the shortest fence markdown accepts. */
+const backtickByte = 0x60;
+const minimumFenceLength = 3;
 
 const unreadableNotice = 'Error reading file content.\n\n';
 
@@ -120,40 +124,117 @@ async function writeEmbeddedContent(
     }
 
     try {
-        const buffer = Buffer.allocUnsafe(readChunkBytes);
-        const decoder = new StringDecoder('utf8');
-
-        // Read the opening chunk before the fence, so a file that fails to be
-        // read leaves a notice rather than an empty code block.
-        let bytesRead: number;
+        // The whole file is scanned before a single character is written, so
+        // that the fence can be made longer than anything inside it and a file
+        // that fails to be read leaves a notice rather than an open block.
+        let fence: string;
         try {
-            ({ bytesRead } = await handle.read(buffer, 0, buffer.length, null));
-        } catch {
+            fence = fenceOf(await longestBacktickRun(handle, signal));
+        } catch (error) {
+            if (error instanceof ExportCancelled) {
+                throw error;
+            }
             await write(unreadableNotice);
             return;
         }
 
-        await write(`\`\`\`${languageHintFor(entry.absolutePath)}\n`);
+        await write(`${fence}${languageHintFor(entry.absolutePath)}\n`);
 
-        while (bytesRead > 0) {
-            // Between chunks as well as between entries, so that a single
-            // very large file can still be cancelled.
-            throwIfCancelled(signal);
-
-            const text = decoder.write(buffer.subarray(0, bytesRead));
-            if (text.length > 0) {
-                await write(text);
+        let failed = false;
+        try {
+            await streamContent(handle, write, signal);
+        } catch (error) {
+            if (error instanceof ExportCancelled) {
+                throw error;
             }
-            ({ bytesRead } = await handle.read(buffer, 0, buffer.length, null));
+            // The file was readable a moment ago, so it changed underneath the
+            // Export. Close the block before saying so, rather than leaving a
+            // fence open and corrupting everything after it.
+            failed = true;
         }
 
-        const trailing = decoder.end();
-        if (trailing.length > 0) {
-            await write(trailing);
-        }
+        await write(`\n${fence}\n\n`);
 
-        await write('\n```\n\n');
+        if (failed) {
+            await write(unreadableNotice);
+        }
     } finally {
         await handle.close();
+    }
+}
+
+/**
+ * The longest unbroken run of backticks anywhere in the file.
+ *
+ * Scanning raw bytes is safe: a backtick is ASCII, and no byte of a multi-byte
+ * UTF-8 sequence is ever below 0x80. A run straddling two chunks is counted as
+ * one, since the count carries across the boundary.
+ */
+async function longestBacktickRun(handle: FileHandle, signal?: AbortSignal): Promise<number> {
+    const buffer = Buffer.allocUnsafe(readChunkBytes);
+    let position = 0;
+    let longest = 0;
+    let current = 0;
+
+    for (;;) {
+        throwIfCancelled(signal);
+
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, position);
+        if (bytesRead === 0) {
+            return longest;
+        }
+        position += bytesRead;
+
+        for (let index = 0; index < bytesRead; index += 1) {
+            if (buffer[index] === backtickByte) {
+                current += 1;
+                if (current > longest) {
+                    longest = current;
+                }
+            } else {
+                current = 0;
+            }
+        }
+    }
+}
+
+/**
+ * A fence one backtick longer than the longest run in the content it will
+ * enclose, which is what makes corruption by an embedded fence impossible.
+ */
+function fenceOf(longestRun: number): string {
+    return '`'.repeat(Math.max(minimumFenceLength, longestRun + 1));
+}
+
+/** Hand the file's decoded content to the Destination chunk by chunk. */
+async function streamContent(
+    handle: FileHandle,
+    write: (chunk: string) => Promise<void>,
+    signal?: AbortSignal
+): Promise<void> {
+    const buffer = Buffer.allocUnsafe(readChunkBytes);
+    const decoder = new StringDecoder('utf8');
+    let position = 0;
+
+    for (;;) {
+        // Between chunks as well as between entries, so that a single very
+        // large file can still be cancelled.
+        throwIfCancelled(signal);
+
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, position);
+        if (bytesRead === 0) {
+            break;
+        }
+        position += bytesRead;
+
+        const text = decoder.write(buffer.subarray(0, bytesRead));
+        if (text.length > 0) {
+            await write(text);
+        }
+    }
+
+    const trailing = decoder.end();
+    if (trailing.length > 0) {
+        await write(trailing);
     }
 }

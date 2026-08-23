@@ -51,6 +51,52 @@ test('a file whose extension has no known language gets a fence with no hint', a
     });
 });
 
+test('a file containing a triple fence is embedded without breaking the enclosing block', async () => {
+    const content = 'Before\n\n```js\nconst answer = 42;\n```\n\nAfter\n';
+
+    await withWorkspace({ 'README.md': content, 'after.ts': 'export {};\n' }, async root => {
+        const markdown = await renderToText([embedded(root, 'README.md'), embedded(root, 'after.ts')]);
+
+        // Four backticks enclose three, so the file's own fence stays content.
+        assert.equal(markdown.includes('````markdown\n' + content), true);
+        assert.equal(markdown.includes('\n````\n'), true);
+        // The entry after it is still a heading of the Export, not swallowed.
+        assert.equal(markdown.includes('## after.ts'), true);
+    });
+});
+
+test('a longer run of backticks widens the fence further', async () => {
+    const content = 'a\n``````\nb\n';
+
+    await withWorkspace({ 'notes.md': content }, async root => {
+        const markdown = await renderToText([embedded(root, 'notes.md')]);
+
+        assert.equal(markdown.includes('```````markdown\n' + content), true);
+        assert.equal(markdown.includes('\n```````\n'), true);
+    });
+});
+
+test('a run of backticks straddling two reads is still counted whole', async () => {
+    // Long enough that the run lands across a 64 KiB read boundary.
+    const padding = 'x'.repeat(64 * 1024 - 2);
+    const content = padding + '`'.repeat(5) + '\n';
+
+    await withWorkspace({ 'wide.md': content }, async root => {
+        const markdown = await renderToText([embedded(root, 'wide.md')]);
+
+        assert.equal(markdown.includes('``````markdown\n'), true);
+    });
+});
+
+test('a file with no backticks in it keeps the ordinary three-backtick fence', async () => {
+    await withWorkspace({ 'plain.ts': 'const answer = 42;\n' }, async root => {
+        const markdown = await renderToText([embedded(root, 'plain.ts')]);
+
+        assert.equal(markdown.includes('```typescript\n'), true);
+        assert.equal(markdown.includes('````'), false);
+    });
+});
+
 test('entries are rendered in the order the Expansion returned them', async () => {
     await withWorkspace({ 'a.ts': '', 'b.ts': '', 'c.ts': '' }, async root => {
         const markdown = await renderToText([
