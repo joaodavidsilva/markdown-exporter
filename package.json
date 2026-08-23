@@ -101,6 +101,12 @@
           },
           "scope": "resource"
         },
+        "markdownExport.maxFileSizeBytes": {
+          "type": "number",
+          "default": 1048576,
+          "description": "Files larger than this many bytes become stubs: listed in the export at their path, with their content omitted and the reason stated. Zero means no limit.",
+          "scope": "resource"
+        },
         "markdownExport.binaryFiles": {
           "type": "array",
           "default": [],

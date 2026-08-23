@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { defaultBinaryFileExtensions, ResolvedConfiguration } from '../core/configuration';
+import { defaultBinaryFileExtensions, defaultMaxFileSizeBytes, ResolvedConfiguration } from '../core/configuration';
 
 /**
  * The adapter boundary for configuration: read the editor's settings once per
@@ -12,6 +12,7 @@ export function getConfiguration(): ResolvedConfiguration {
         outputFile: config.get<string>('outputFile', 'FULL_CODE.md'),
         additionalIgnore: config.get<string[]>('additionalIgnore', []),
         binaryFileExtensions: config.get<string[]>('binaryFileExtensions', [...defaultBinaryFileExtensions]),
-        binaryFiles: config.get<string[]>('binaryFiles', [])
+        binaryFiles: config.get<string[]>('binaryFiles', []),
+        maxFileSizeBytes: config.get<number>('maxFileSizeBytes', defaultMaxFileSizeBytes)
     };
 }

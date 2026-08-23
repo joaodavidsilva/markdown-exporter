@@ -1,5 +1,7 @@
-import { readdir, stat } from 'node:fs/promises';
+import type { Stats } from 'node:fs';
+import { lstat, readdir, stat } from 'node:fs/promises';
 import * as path from 'node:path';
+import { hasBinaryContent, hasBinaryExtension } from './binaryDetection';
 import { throwIfCancelled } from './cancellation';
 import { ResolvedConfiguration } from './configuration';
 import { compileExclusions, CompiledExclusions } from './exclusions';
@@ -48,6 +50,11 @@ export interface ExpansionRequest {
  * The first seam. Walks a Selection down to the ordered list of entries that
  * will appear in the Export, applying every Exclusion along the way and
  * classifying what survives.
+ *
+ * An Exclusion and a Stub are not two names for the same thing. An Exclusion
+ * removes a file so completely that the Export gives no sign it existed; a
+ * Stub is a decision to mention the file and omit its content, with the reason
+ * stated. Both decisions are taken here, and nowhere else.
  */
 export async function expandSelection(request: ExpansionRequest): Promise<ExpansionEntry[]> {
     const { selectionPaths, workspaceRoot, configuration, exportFileName, signal } = request;
@@ -58,12 +65,15 @@ export async function expandSelection(request: ExpansionRequest): Promise<Expans
     // compiled here, and the walk below only ever asks the compiled rules.
     const exclusions = await compileExclusions(workspaceRoot, configuration, exportFileName);
 
-    const walk: Walk = { request, exclusions, filePaths: [] };
+    const walk: Walk = { request, exclusions, found: [] };
 
     for (const selectionPath of selectionPaths) {
         throwIfCancelled(signal);
 
-        let stats;
+        // A picked path is resolved through its link if it is one: the user
+        // pointed at it deliberately. That resolution happens once, before any
+        // walking, so it cannot be the step that a cycle rides on.
+        let stats: Stats;
         try {
             stats = await stat(selectionPath);
         } catch {
@@ -72,8 +82,12 @@ export async function expandSelection(request: ExpansionRequest): Promise<Expans
 
         if (stats.isFile()) {
             if (!exclusions.excludes(selectionPath)) {
-                found(walk, selectionPath);
+                record(walk, { absolutePath: selectionPath, sizeBytes: stats.size });
             }
+            continue;
+        }
+
+        if (!stats.isDirectory()) {
             continue;
         }
 
@@ -87,31 +101,68 @@ export async function expandSelection(request: ExpansionRequest): Promise<Expans
         await collectDirectory(selectionPath, walk);
     }
 
-    walk.filePaths.sort();
+    walk.found.sort(byAbsolutePath);
 
-    return walk.filePaths.map(absolutePath => classify(absolutePath, workspaceRoot));
+    const classifier = createClassifier(workspaceRoot, configuration);
+    const entries: ExpansionEntry[] = [];
+
+    for (const candidate of walk.found) {
+        throwIfCancelled(signal);
+        entries.push(await classifier(candidate));
+    }
+
+    return entries;
+}
+
+/**
+ * Something the walk found and the classification has yet to judge, unless the
+ * walk itself already knows it can only be a Stub.
+ */
+interface Candidate {
+    absolutePath: string;
+    /** Size in bytes, when the walk already learnt it. */
+    sizeBytes?: number;
+    /** Set when the walk itself established the entry is a Stub. */
+    reason?: StubReason;
 }
 
 /** The state one Expansion carries down through the walk. */
 interface Walk {
     request: ExpansionRequest;
     exclusions: CompiledExclusions;
-    filePaths: string[];
+    found: Candidate[];
 }
 
-function found(walk: Walk, filePath: string): void {
-    walk.filePaths.push(filePath);
+function byAbsolutePath(left: Candidate, right: Candidate): number {
+    if (left.absolutePath === right.absolutePath) {
+        return 0;
+    }
+    return left.absolutePath < right.absolutePath ? -1 : 1;
+}
+
+function record(walk: Walk, candidate: Candidate): void {
+    walk.found.push(candidate);
     walk.request.onProgress?.({
         phase: 'expansion',
-        completed: walk.filePaths.length,
-        detail: path.relative(walk.request.workspaceRoot, filePath)
+        completed: walk.found.length,
+        detail: path.relative(walk.request.workspaceRoot, candidate.absolutePath)
     });
 }
 
 async function collectDirectory(directoryPath: string, walk: Walk): Promise<void> {
     throwIfCancelled(walk.request.signal);
 
-    const items = await readdir(directoryPath);
+    let items: string[];
+    try {
+        items = await readdir(directoryPath);
+    } catch {
+        // One directory the user cannot read used to cost the whole Export.
+        // It becomes a Stub at its own path instead: the Export says the
+        // folder is there and that nothing could be read out of it, and the
+        // rest of the Selection is exported as normal.
+        record(walk, { absolutePath: directoryPath, reason: 'unreadable' });
+        return;
+    }
 
     for (const item of items) {
         throwIfCancelled(walk.request.signal);
@@ -122,24 +173,118 @@ async function collectDirectory(directoryPath: string, walk: Walk): Promise<void
             continue;
         }
 
-        const stats = await stat(itemPath);
-        if (stats.isDirectory()) {
+        let link: Stats;
+        try {
+            link = await lstat(itemPath);
+        } catch {
+            record(walk, { absolutePath: itemPath, reason: 'unreadable' });
+            continue;
+        }
+
+        if (link.isSymbolicLink()) {
+            await collectLink(itemPath, walk);
+            continue;
+        }
+
+        if (link.isDirectory()) {
             await collectDirectory(itemPath, walk);
-        } else {
-            found(walk, itemPath);
+            continue;
+        }
+
+        // Anything that is neither a file nor a directory — a socket, a fifo,
+        // a device — is left alone. Opening one can block for ever, and none
+        // of them is what anybody meant by picking a folder.
+        if (link.isFile()) {
+            record(walk, { absolutePath: itemPath, sizeBytes: link.size });
         }
     }
 }
 
 /**
- * Binary files are removed by an Exclusion during the walk today, so nothing
- * reaches here that should be a Stub. The classification travels with the
- * entry so that the decision has one home when Stubs arrive.
+ * What the walk does with a symlink it found. `lstat` reported the link
+ * itself, so nothing here has followed anything yet.
  */
-function classify(absolutePath: string, workspaceRoot: string): ExpansionEntry {
-    return {
-        absolutePath,
-        relativePath: path.relative(workspaceRoot, absolutePath),
-        classification: 'embed'
+async function collectLink(linkPath: string, walk: Walk): Promise<void> {
+    let target: Stats;
+    try {
+        target = await stat(linkPath);
+    } catch {
+        // A link pointing nowhere used to throw straight out of the walk. It
+        // is a Stub: the path is in the Selection, and there is no content
+        // behind it to read.
+        record(walk, { absolutePath: linkPath, reason: 'unreadable' });
+        return;
+    }
+
+    // A directory symlink is never followed. A link back up its own tree would
+    // otherwise walk for ever, and one pointing sideways would export the same
+    // files twice under two names.
+    if (target.isFile()) {
+        record(walk, { absolutePath: linkPath, sizeBytes: target.size });
+    }
+}
+
+/**
+ * Judge one candidate: embedded, or a Stub with the reason stated.
+ *
+ * The order is the order of certainty and of cost. What the configuration
+ * declares binary is settled without reading anything; size follows, because a
+ * file too large to embed is too large to sniff; the content sniff comes last,
+ * and it is the one that catches the extensions nobody listed.
+ */
+function createClassifier(
+    workspaceRoot: string,
+    configuration: ResolvedConfiguration
+): (candidate: Candidate) => Promise<ExpansionEntry> {
+    const binaryFiles = new Set(configuration.binaryFiles);
+    const { maxFileSizeBytes } = configuration;
+
+    return async (candidate: Candidate): Promise<ExpansionEntry> => {
+        const { absolutePath } = candidate;
+        const relativePath = path.relative(workspaceRoot, absolutePath);
+
+        const stubbed = (reason: StubReason): StubEntry => ({
+            absolutePath,
+            relativePath,
+            classification: 'stub',
+            reason
+        });
+
+        if (candidate.reason) {
+            return stubbed(candidate.reason);
+        }
+
+        if (binaryFiles.has(relativePath)) {
+            return stubbed('binary');
+        }
+
+        if (hasBinaryExtension(absolutePath, configuration.binaryFileExtensions)) {
+            return stubbed('binary');
+        }
+
+        let sizeBytes = candidate.sizeBytes;
+        if (sizeBytes === undefined) {
+            try {
+                sizeBytes = (await stat(absolutePath)).size;
+            } catch {
+                return stubbed('unreadable');
+            }
+        }
+
+        // A threshold of zero, or less, is read as no threshold at all rather
+        // than as a rule that stubs every file in the Selection.
+        if (maxFileSizeBytes > 0 && sizeBytes > maxFileSizeBytes) {
+            return stubbed('too-large');
+        }
+
+        try {
+            if (await hasBinaryContent(absolutePath)) {
+                return stubbed('binary');
+            }
+        } catch {
+            return stubbed('unreadable');
+        }
+
+        return { absolutePath, relativePath, classification: 'embed' };
     };
 }

@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import { hasBinaryExtension } from './binaryDetection';
 import { ResolvedConfiguration } from './configuration';
 import { createGitignoreFilter } from './gitignore';
 
@@ -53,7 +52,6 @@ export async function compileExclusions(
     const isGitignored = await createGitignoreFilter(workspaceRoot);
 
     const additionalIgnore = new Set(configuration.additionalIgnore);
-    const binaryFiles = new Set(configuration.binaryFiles);
     const outputFilePath = path.join(workspaceRoot, configuration.outputFile);
     const exportFilePath = exportFileName
         ? path.join(workspaceRoot, exportFileName)
@@ -92,14 +90,6 @@ export async function compileExclusions(
             }
 
             if (exportFilePath && absolutePath === exportFilePath) {
-                return true;
-            }
-
-            if (binaryFiles.has(relativePath)) {
-                return true;
-            }
-
-            if (hasBinaryExtension(absolutePath, configuration.binaryFileExtensions)) {
                 return true;
             }
 

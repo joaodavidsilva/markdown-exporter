@@ -1,13 +1,28 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { defaultBinaryFileExtensions, ResolvedConfiguration } from '../core/configuration';
+import { defaultBinaryFileExtensions, defaultMaxFileSizeBytes, ResolvedConfiguration } from '../core/configuration';
+
+/** A symlink to lay down, rather than a file with content. */
+export interface WorkspaceSymlink {
+    /** What the link points at, relative to the workspace root. */
+    linkTo: string;
+}
+
+/**
+ * Lay down a symlink at this key. The target need not exist — a link that
+ * points nowhere is one of the cases the Expansion has to survive.
+ */
+export function symlinkTo(relativeTarget: string): WorkspaceSymlink {
+    return { linkTo: relativeTarget };
+}
 
 /**
  * Files to lay down, keyed by path relative to the workspace root. A key
- * ending in a separator creates an empty directory.
+ * ending in a separator creates an empty directory; a `symlinkTo` value
+ * creates a link instead of a file.
  */
-export type WorkspaceFiles = Record<string, string | Buffer>;
+export type WorkspaceFiles = Record<string, string | Buffer | WorkspaceSymlink>;
 
 /**
  * Build a real workspace on disk, run against it, then tear it down. The code
@@ -20,6 +35,10 @@ export async function withWorkspace<T>(
 ): Promise<T> {
     const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'markdown-exporter-')));
     try {
+        // Files first, then links: a link whose target is laid down later
+        // would otherwise be born broken by accident rather than on purpose.
+        const links: [string, WorkspaceSymlink][] = [];
+
         for (const [relativePath, content] of Object.entries(files)) {
             const absolutePath = path.join(root, relativePath);
             if (relativePath.endsWith('/')) {
@@ -27,12 +46,24 @@ export async function withWorkspace<T>(
                 continue;
             }
             await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+            if (isSymlink(content)) {
+                links.push([absolutePath, content]);
+                continue;
+            }
             await fs.writeFile(absolutePath, content);
+        }
+
+        for (const [absolutePath, link] of links) {
+            await fs.symlink(path.join(root, link.linkTo), absolutePath);
         }
         return await run(root);
     } finally {
         await fs.rm(root, { recursive: true, force: true });
     }
+}
+
+function isSymlink(content: string | Buffer | WorkspaceSymlink): content is WorkspaceSymlink {
+    return typeof content === 'object' && !Buffer.isBuffer(content);
 }
 
 /**
@@ -47,6 +78,7 @@ export function resolvedConfiguration(
         additionalIgnore: [],
         binaryFileExtensions: [...defaultBinaryFileExtensions],
         binaryFiles: [],
+        maxFileSizeBytes: defaultMaxFileSizeBytes,
         ...overrides
     };
 }

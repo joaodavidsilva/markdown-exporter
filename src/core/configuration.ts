@@ -14,7 +14,19 @@ export interface ResolvedConfiguration {
     binaryFileExtensions: string[];
     /** Exact relative paths treated as binary. */
     binaryFiles: string[];
+    /**
+     * Above this many bytes a file becomes a Stub rather than being embedded.
+     * Zero, or anything below it, means no limit.
+     */
+    maxFileSizeBytes: number;
 }
+
+/**
+ * A source file this side of a megabyte is the ordinary case; past it a file
+ * is almost always generated, vendored or a log, and embedding it whole costs
+ * the rest of the Export its room.
+ */
+export const defaultMaxFileSizeBytes = 1024 * 1024;
 
 export const defaultBinaryFileExtensions: readonly string[] = [
     'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff', 'ico',
