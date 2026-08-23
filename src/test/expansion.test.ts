@@ -1,4 +1,5 @@
 import * as assert from 'node:assert/strict';
+import { chmod } from 'node:fs/promises';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { expandSelection } from '../core/expansion';
@@ -157,5 +158,92 @@ test('the file this Export writes to is never part of it', async () => {
         });
 
         assert.deepEqual(relativePaths(entries), [path.join('src', 'index.ts')]);
+    });
+});
+
+test('.git is never part of an Expansion, with no .gitignore present', async () => {
+    await withWorkspace({
+        '.git/HEAD': 'ref: refs/heads/main\n',
+        '.git/objects/ab/cdef': 'object\n',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(relativePaths(entries), [path.join('src', 'index.ts')]);
+    });
+});
+
+test('.git is never part of an Expansion when a .gitignore that does not mention it is present', async () => {
+    await withWorkspace({
+        '.gitignore': '*.log\n',
+        '.git/HEAD': 'ref: refs/heads/main\n',
+        '.git/objects/ab/cdef': 'object\n',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(relativePaths(entries), ['.gitignore', path.join('src', 'index.ts')]);
+    });
+});
+
+test('a .git nested beneath the workspace root is suppressed too', async () => {
+    await withWorkspace({
+        'vendor/library/.git/HEAD': 'ref: refs/heads/main\n',
+        'vendor/library/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(relativePaths(entries), [path.join('vendor', 'library', 'index.ts')]);
+    });
+});
+
+test('a picked .git is suppressed, since the suppression is not configurable', async () => {
+    await withWorkspace({ '.git/HEAD': 'ref: refs/heads/main\n' }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [path.join(root, '.git')],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.deepEqual(entries, []);
+    });
+});
+
+test('.git is not walked at all, not merely filtered out of the entries', async () => {
+    if (process.getuid?.() === 0) {
+        return;
+    }
+
+    await withWorkspace({
+        '.git/objects/ab/cdef': 'object\n',
+        'src/index.ts': ''
+    }, async root => {
+        const gitDirectory = path.join(root, '.git');
+        // A directory that cannot be read at all: reaching into it would fail
+        // the Expansion, so completing proves the walk never went in.
+        await chmod(gitDirectory, 0o000);
+        try {
+            const entries = await expandSelection({
+                selectionPaths: [root],
+                workspaceRoot: root,
+                configuration: resolvedConfiguration()
+            });
+
+            assert.deepEqual(relativePaths(entries), [path.join('src', 'index.ts')]);
+        } finally {
+            await chmod(gitDirectory, 0o755);
+        }
     });
 });

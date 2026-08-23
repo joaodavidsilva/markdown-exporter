@@ -4,6 +4,21 @@ import { ResolvedConfiguration } from './configuration';
 import { createGitignoreFilter } from './gitignore';
 
 /**
+ * Directory names no Expansion ever walks into. This suppression is built in
+ * and deliberately not configurable: `.gitignore` never lists itself, so
+ * without it every Export of a repository with history spends most of its time
+ * on objects nobody would ever export.
+ */
+const suppressedDirectoryNames = new Set(['.git']);
+
+/** Whether the built-in suppression removes this path, or anything above it. */
+function isSuppressed(relativePath: string): boolean {
+    return relativePath
+        .split(path.sep)
+        .some(segment => suppressedDirectoryNames.has(segment));
+}
+
+/**
  * Whether an Exclusion removes this path, so that it appears nowhere in the
  * Export.
  *
@@ -18,6 +33,10 @@ export async function isExcluded(
     exportFileName?: string
 ): Promise<boolean> {
     const relativePath = path.relative(workspaceRoot, filePath);
+
+    if (isSuppressed(relativePath)) {
+        return true;
+    }
 
     const isGitignored = await createGitignoreFilter(workspaceRoot);
     if (isGitignored(filePath)) {
