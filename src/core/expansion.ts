@@ -164,6 +164,11 @@ async function collectDirectory(directoryPath: string, walk: Walk): Promise<void
         return;
     }
 
+    // The Exclusion sources this directory brings with it are read here, once,
+    // before anything inside it is judged — and from the listing already in
+    // hand, so a directory without a `.gitignore` costs no read at all.
+    await walk.exclusions.enter(directoryPath, items);
+
     for (const item of items) {
         throwIfCancelled(walk.request.signal);
 

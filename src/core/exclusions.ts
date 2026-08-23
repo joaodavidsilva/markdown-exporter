@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import { ResolvedConfiguration } from './configuration';
-import { createGitignoreFilter } from './gitignore';
+import { createGitignoreChain } from './gitignore';
 
 /**
  * Directory names no Expansion ever walks into. This suppression is built in
@@ -21,9 +21,10 @@ function isSuppressed(relativePath: string): boolean {
  * The Exclusion rules of one Export, already read from disk and compiled.
  *
  * Deciding an Exclusion must not touch the filesystem: the sources are read
- * once per Export, by `compileExclusions`, and every path is then answered
- * from memory. Reading them per file is what made Export time grow with the
- * square of the repository size.
+ * once per Export — `enter` reads each `.gitignore` the moment the walk first
+ * needs it and never again — and every path is then answered from memory.
+ * Reading them per file is what made Export time grow with the square of the
+ * repository size.
  */
 export interface CompiledExclusions {
     /** Whether an Exclusion removes this path from the Expansion. */
@@ -35,6 +36,11 @@ export interface CompiledExclusions {
      * and cannot be turned off, while every other source is the user's.
      */
     suppresses(absolutePath: string): boolean;
+    /**
+     * Read the sources that govern a directory the walk is about to read,
+     * given its listing. Every path beneath it is then answered from memory.
+     */
+    enter(directoryPath: string, entryNames?: readonly string[]): Promise<void>;
 }
 
 /**
@@ -49,7 +55,7 @@ export async function compileExclusions(
     configuration: ResolvedConfiguration,
     exportFileName?: string
 ): Promise<CompiledExclusions> {
-    const isGitignored = await createGitignoreFilter(workspaceRoot);
+    const gitignore = createGitignoreChain(workspaceRoot);
 
     const additionalIgnore = new Set(configuration.additionalIgnore);
     const outputFilePath = path.join(workspaceRoot, configuration.outputFile);
@@ -64,6 +70,11 @@ export async function compileExclusions(
 
     return {
         suppresses,
+
+        enter(directoryPath: string, entryNames?: readonly string[]): Promise<void> {
+            return gitignore.enter(directoryPath, entryNames);
+        },
+
         excludes(absolutePath: string): boolean {
             const relativePath = path.relative(workspaceRoot, absolutePath);
 
@@ -77,7 +88,7 @@ export async function compileExclusions(
                 return true;
             }
 
-            if (isGitignored(absolutePath)) {
+            if (gitignore.decide(absolutePath) === 'excluded') {
                 return true;
             }
 

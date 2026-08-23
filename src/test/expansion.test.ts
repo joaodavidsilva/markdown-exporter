@@ -142,6 +142,64 @@ test('everything beneath a directory a .gitignore rule matches is excluded', asy
     });
 });
 
+test('a nested .gitignore is honoured, not only the one at the workspace root', async () => {
+    await withWorkspace({
+        '.gitignore': '*.log\n',
+        'src/.gitignore': '*.snap\n',
+        'src/component.snap': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        assert.equal(relativePaths(entries).includes(path.join('src', 'component.snap')), false);
+        assert.equal(relativePaths(entries).includes(path.join('src', 'index.ts')), true);
+    });
+});
+
+test('a negation in a nested .gitignore re-includes what the root one excluded', async () => {
+    await withWorkspace({
+        '.gitignore': '*.log\n',
+        'src/.gitignore': '!keep.log\n',
+        'src/keep.log': '',
+        'src/drop.log': '',
+        'drop.log': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        const paths = relativePaths(entries);
+        assert.equal(paths.includes(path.join('src', 'keep.log')), true);
+        assert.equal(paths.includes(path.join('src', 'drop.log')), false);
+        assert.equal(paths.includes('drop.log'), false);
+    });
+});
+
+test('a nested .gitignore inside a directory the root excluded is never reached', async () => {
+    await withWorkspace({
+        '.gitignore': 'node_modules/\n',
+        'node_modules/.gitignore': '!keep.js\n',
+        'node_modules/left-pad/keep.js': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration()
+        });
+
+        // git cannot re-include a file beneath an excluded directory, and the
+        // walk never descends into one, so the negation below never applies.
+        assert.deepEqual(relativePaths(entries), ['.gitignore', path.join('src', 'index.ts')]);
+    });
+});
+
 test('a file listed in additionalIgnore is excluded from the Expansion', async () => {
     await withWorkspace({ 'notes.md': '', 'src/index.ts': '' }, async root => {
         const entries = await expandSelection({
