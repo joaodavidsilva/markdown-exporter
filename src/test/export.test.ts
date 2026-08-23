@@ -3,6 +3,7 @@ import { chmod, readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { ExportCancelled } from '../core/cancellation';
+import { ResolvedConfiguration } from '../core/configuration';
 import { createBufferedDestination, ExportDestination, openFileDestination } from '../core/destinations';
 import { createExport } from '../core/export';
 import { expandSelection, ExpansionEntry, StubReason } from '../core/expansion';
@@ -25,9 +26,12 @@ function stub(root: string, relativePath: string, reason: StubReason): Expansion
     };
 }
 
-async function renderToText(entries: ExpansionEntry[]): Promise<string> {
+async function renderToText(
+    entries: ExpansionEntry[],
+    configuration: ResolvedConfiguration = resolvedConfiguration()
+): Promise<string> {
     const destination = createBufferedDestination();
-    await createExport({ entries, configuration: resolvedConfiguration(), destination });
+    await createExport({ entries, configuration, destination });
     return destination.text();
 }
 
@@ -378,11 +382,15 @@ test('the named families are recognised past their first member', async () => {
         'api.dockerfile': 'FROM scratch\n',
         '.env.production': 'KEY=value\n'
     }, async root => {
+        // This test is about the language hint, not Redaction — a `.env.`
+        // file's content is otherwise Redacted by design (see
+        // redaction.test.ts), which would mask the literal 'value' this
+        // assertion checks for.
         const markdown = await renderToText([
             embedded(root, 'Dockerfile.builder'),
             embedded(root, 'api.dockerfile'),
             embedded(root, '.env.production')
-        ]);
+        ], resolvedConfiguration({ redactionEnabled: false }));
 
         assert.equal(markdown.match(/```dockerfile\nFROM scratch\n/g)?.length, 2);
         assert.equal(markdown.includes('```dotenv\nKEY=value\n'), true);

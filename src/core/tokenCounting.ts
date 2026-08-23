@@ -111,7 +111,12 @@ function cutPoint(text: string, toTheEnd: boolean): number {
     return cut;
 }
 
-function isLowSurrogate(code: number): boolean {
+/**
+ * Exported for export.ts: writing a Redacted file out in bounded pieces has
+ * exactly the same surrogate-pair hazard a cut point does here, and it is
+ * one function either way, not two copies of it.
+ */
+export function isLowSurrogate(code: number): boolean {
     return code >= 0xdc00 && code <= 0xdfff;
 }
 
