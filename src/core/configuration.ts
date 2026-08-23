@@ -8,7 +8,11 @@
 export interface ResolvedConfiguration {
     /** Base name of the file Destination, relative to the workspace root. */
     outputFile: string;
-    /** Exact relative paths excluded on top of the other Exclusion sources. */
+    /**
+     * Paths and `.gitignore`-syntax globs excluded on top of the other
+     * Exclusion sources, and above all of them. An entry with no glob
+     * character in it is an exact path relative to the workspace root.
+     */
     additionalIgnore: string[];
     /** Extensions (without a dot) treated as binary. */
     binaryFileExtensions: string[];

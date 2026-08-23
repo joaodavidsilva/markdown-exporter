@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { ResolvedConfiguration } from './configuration';
 import { createGitignoreChain } from './gitignore';
-import { IgnoreVerdict, readIgnoreRules } from './ignoreRules';
+import { compileIgnoreRules, IgnoreVerdict, readIgnoreRules } from './ignoreRules';
 
 /**
  * Directory names no Expansion ever walks into. This suppression is built in
@@ -16,6 +16,33 @@ const suppressedDirectoryNames = new Set(['.git']);
  * settings, so that everybody exporting the project gets the same ones.
  */
 const exportIgnoreName = '.exportignore';
+
+/** The characters that make a pattern a glob rather than a plain path. */
+const globCharacters = /[*?[\]!]/;
+
+/**
+ * One `additionalIgnore` entry, as a `.gitignore`-syntax pattern.
+ *
+ * The setting used to match exact relative paths and now accepts globs, and
+ * the two readings differ for a bare name: `notes.md` as a glob would take out
+ * every `notes.md` in the tree, where before it took out only the one at the
+ * workspace root. So an entry with no glob character in it is anchored to the
+ * root, which is exactly what it meant before. Upgrading changes nobody's
+ * Export, and a pattern with a glob character in it is how the wider reading
+ * is asked for.
+ */
+function additionalIgnorePattern(pattern: string): string {
+    const trimmed = pattern.trim();
+
+    if (trimmed === '' || globCharacters.test(trimmed)) {
+        return trimmed;
+    }
+
+    // A plain path, so a backslash in it is a Windows separator rather than
+    // the escape character `.gitignore` syntax reads it as.
+    const posix = trimmed.split('\\').join('/');
+    return posix.startsWith('/') ? posix : `/${posix}`;
+}
 
 /** Whether the built-in suppression removes this path, or anything above it. */
 function isSuppressed(relativePath: string): boolean {
@@ -69,7 +96,9 @@ export async function compileExclusions(
     const gitignore = createGitignoreChain(workspaceRoot);
     const exportIgnore = await readIgnoreRules(path.join(workspaceRoot, exportIgnoreName));
 
-    const additionalIgnore = new Set(configuration.additionalIgnore);
+    const additionalIgnore = compileIgnoreRules(
+        configuration.additionalIgnore.map(additionalIgnorePattern)
+    );
     const outputFilePath = path.join(workspaceRoot, configuration.outputFile);
     const exportFilePath = exportFileName
         ? path.join(workspaceRoot, exportFileName)
@@ -98,8 +127,9 @@ export async function compileExclusions(
      * negations can keep what git excluded.
      */
     const decide = (absolutePath: string, relativePath: string): IgnoreVerdict | undefined => {
-        if (additionalIgnore.has(relativePath)) {
-            return 'excluded';
+        const additional = additionalIgnore.decide(relativePath);
+        if (additional) {
+            return additional;
         }
 
         const exportIgnored = exportIgnore?.decide(relativePath);

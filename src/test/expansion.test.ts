@@ -301,6 +301,86 @@ test('a file listed in additionalIgnore is excluded from the Expansion', async (
     });
 });
 
+test('an exact path in additionalIgnore still means that path and no other', async () => {
+    await withWorkspace({
+        'notes.md': '',
+        'src/notes.md': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration({ additionalIgnore: ['notes.md'] })
+        });
+
+        // The setting accepts globs now, but a path that was exact before is
+        // still exact: upgrading does not quietly take more out of an Export.
+        assert.deepEqual(relativePaths(entries), [
+            path.join('src', 'index.ts'),
+            path.join('src', 'notes.md')
+        ]);
+    });
+});
+
+test('an exact nested path in additionalIgnore keeps working unchanged', async () => {
+    await withWorkspace({ 'src/notes.md': '', 'src/index.ts': '' }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration({ additionalIgnore: ['src/notes.md'] })
+        });
+
+        assert.deepEqual(relativePaths(entries), [path.join('src', 'index.ts')]);
+    });
+});
+
+test('a directory named in additionalIgnore takes everything beneath it', async () => {
+    await withWorkspace({ 'dist/bundle.js': '', 'dist/deep/chunk.js': '', 'src/index.ts': '' }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration({ additionalIgnore: ['dist'] })
+        });
+
+        assert.deepEqual(relativePaths(entries), [path.join('src', 'index.ts')]);
+    });
+});
+
+test('additionalIgnore accepts a glob', async () => {
+    await withWorkspace({
+        'src/deep/component.snap': '',
+        'test/other.snap': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration({ additionalIgnore: ['**/*.snap'] })
+        });
+
+        assert.deepEqual(relativePaths(entries), [path.join('src', 'index.ts')]);
+    });
+});
+
+test('additionalIgnore takes precedence over the .exportignore and the .gitignore', async () => {
+    await withWorkspace({
+        '.gitignore': '*.log\n',
+        '.exportignore': '!debug.log\n',
+        'debug.log': '',
+        'src/index.ts': ''
+    }, async root => {
+        const entries = await expandSelection({
+            selectionPaths: [root],
+            workspaceRoot: root,
+            configuration: resolvedConfiguration({ additionalIgnore: ['debug.log'] })
+        });
+
+        // The .exportignore had re-included it over the .gitignore; the
+        // setting is the last word.
+        assert.equal(relativePaths(entries).includes('debug.log'), false);
+    });
+});
+
 test('a previous Export at the configured output file is never part of a new one', async () => {
     await withWorkspace({ 'FULL_CODE.md': '# Project Code Export\n', 'src/index.ts': '' }, async root => {
         const entries = await expandSelection({

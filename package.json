@@ -60,10 +60,10 @@
         "markdownExport.additionalIgnore": {
           "type": "array",
           "default": [],
-          "description": "Additional paths to ignore (relative to workspace root)",
+          "description": "Additional paths or glob patterns to ignore, in .gitignore syntax. An entry with no glob character in it is an exact path relative to the workspace root, as before; use a pattern such as **/*.snap to match anywhere in the tree. Takes precedence over .exportignore and .gitignore.",
           "items": {
             "type": "string",
-            "description": "Path to ignore"
+            "description": "Path or glob pattern to ignore"
           },
           "scope": "resource"
         },
