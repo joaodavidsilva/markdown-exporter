@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="390" viewBox="0 0 1200 390"
+     role="img" aria-labelledby="title desc">
+  <title id="title">What Shapes an Export: Exclusion vs. Stub vs. Redaction</title>
+  <desc id="desc">Comparison of the three rules that shape an export: 1. Exclusion omits a path completely using .gitignore, .exportignore, and additionalIgnore; 2. Stub lists the path in the file tree and omits content with a stated reason (binary, too large, or unreadable); 3. Redaction embeds the file while masking .env values and recognisable credentials inline.</desc>
+
+  <!-- Outer Canvas -->
+  <rect width="1200" height="390" rx="22" fill="#F6F3EC"/>
+  <rect x="0.75" y="0.75" width="1198.5" height="388.5" rx="21.25" fill="none" stroke="#D8D2C5" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="40" y="48" fill="#0F6E8C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">THREE DISTINCT MECHANISMS · ZERO SILENT DATA LOSS</text>
+  <text x="40" y="82" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="30" font-weight="800">Exclusion vs. Stub vs. Redaction</text>
+
+  <!-- COLUMN 1: EXCLUSION -->
+  <g id="col-exclusion" transform="translate(36 106)">
+    <rect width="360" height="252" rx="14" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+    <rect x="1" y="1" width="358" height="42" rx="13" fill="#EFECE4"/>
+    <circle cx="22" cy="22" r="6" fill="#0F6E8C"/>
+    <text x="36" y="28" fill="#0F6E8C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700">EXCLUSION · SILENT OMISSION</text>
+
+    <text x="20" y="70" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">Appears nowhere in Export</text>
+    <text x="20" y="96" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">Strict precedence (last rule wins):</text>
+
+    <rect x="18" y="112" width="324" height="92" rx="8" fill="#F6F3EC" stroke="#D8D2C5" stroke-width="1"/>
+    <text x="28" y="137" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">1. Nested .gitignore files</text>
+    <text x="28" y="163" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">2. Root .exportignore (!negate)</text>
+    <text x="28" y="189" fill="#0F6E8C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">3. Settings: additionalIgnore</text>
+
+    <text x="20" y="232" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">Never walks <tspan font-family="ui-monospace, monospace" fill="#141920" font-weight="600">.git/</tspan> or prior exports</text>
+  </g>
+
+  <!-- COLUMN 2: STUB -->
+  <g id="col-stub" transform="translate(420 106)">
+    <rect width="360" height="252" rx="14" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+    <rect x="1" y="1" width="358" height="42" rx="13" fill="#EFECE4"/>
+    <circle cx="22" cy="22" r="6" fill="#B45309"/>
+    <text x="36" y="28" fill="#B45309" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700">STUB · MENTION &amp; OMIT</text>
+
+    <text x="20" y="70" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">Path kept, content omitted</text>
+    <text x="20" y="96" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">Annotated in tree + reason notice:</text>
+
+    <rect x="18" y="112" width="324" height="92" rx="8" fill="#F6F3EC" stroke="#D8D2C5" stroke-width="1"/>
+    <text x="30" y="137" fill="#B45309" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="600">• (omitted: binary)</text>
+    <text x="30" y="163" fill="#B45309" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="600">• (omitted: too large)</text>
+    <text x="30" y="189" fill="#B45309" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="600">• (omitted: unreadable)</text>
+
+    <text x="20" y="232" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">Catches null bytes in first 8 KB</text>
+  </g>
+
+  <!-- COLUMN 3: REDACTION -->
+  <g id="col-redaction" transform="translate(804 106)">
+    <rect width="360" height="252" rx="14" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+    <rect x="1" y="1" width="358" height="42" rx="13" fill="#EFECE4"/>
+    <circle cx="22" cy="22" r="6" fill="#C53030"/>
+    <text x="36" y="28" fill="#C53030" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700">REDACTION · INLINE MASK</text>
+
+    <text x="20" y="70" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">File embedded, secrets masked</text>
+    <text x="20" y="96" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">Best-effort safety net across files:</text>
+
+    <rect x="18" y="112" width="324" height="92" rx="8" fill="#F6F3EC" stroke="#D8D2C5" stroke-width="1"/>
+    <text x="30" y="137" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17">• .env / .env.* values →</text>
+    <text x="46" y="163" fill="#C53030" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">[REDACTED: .env value]</text>
+    <text x="28" y="189" fill="#C53030" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="600">• AWS, GitHub, OpenAI, JWT, DB</text>
+
+    <text x="20" y="232" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">Count reported in completion toast</text>
+  </g>
+</svg>

@@ -1,0 +1,9 @@
+Use case: background-extraction
+Asset type: transparent cutout subject for a GitHub README hero
+Primary request: A warm hand-painted Studio Ghibli-inspired anime illustration of the young developer character from Image 1 (short wavy chestnut-auburn bob hair, friendly focused expression, wearing a cozy deep ocean-blue sweater), shown waist-up at a warm cream laptop bearing a minimal geometric blue ribbon emblem on the lid, holding up a neat stack of bound cream parchment code sheets with subtle horizontal rule lines, angled slightly toward the right side of the frame as if presenting the compiled export.
+Input images: Image 1: character identity and hand-painted watercolor/ink linework style reference (icon.png)
+Composition/framing: one isolated waist-up character with laptop on a small wooden desk edge, centered with generous flat green padding on every side, facing and glancing slightly toward the right
+Lighting/mood: warm studio key light from top-left, soft golden rim light on hair and shoulders, cheerful and focused craftsmanship
+Color palette: warm chestnut brown (#8C4A27), soft cream parchment (#F6F3EC), deep ocean blue (#1D5F8A), warm walnut wood (#9C6B3B); the subject contains no #00ff00 neon green
+Constraints: one isolated subject; crisp clean outer silhouette with dark ink linework; generous padding on all four sides; no text, no letters, no numbers, no watermark
+Background: perfectly flat solid #00ff00 chroma key green with no gradient, no texture, no floor, no reflection, no shadow, and no vignette

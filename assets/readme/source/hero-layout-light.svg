@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="420" viewBox="0 0 1200 420"
+     role="img" aria-labelledby="title desc">
+  <title id="title">Selection Markdown Exporter — Curated VS Code selections to Markdown</title>
+  <desc id="desc">Turn a hand-picked selection of files and folders in the VS Code Explorer into a single, token-counted, secret-redacted Markdown document on the clipboard or in a timestamped file.</desc>
+
+  <defs>
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="1200" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F6F3EC"/>
+      <stop offset="60%" stop-color="#EFECE4"/>
+      <stop offset="100%" stop-color="#E8E3D7"/>
+    </linearGradient>
+    <radialGradient id="subject-glow" cx="600" cy="295" r="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F6E8C" stop-opacity="0.14"/>
+      <stop offset="65%" stop-color="#B45309" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#F6F3EC" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Outer Canvas -->
+  <rect width="1200" height="420" rx="24" fill="url(#bg-grad)"/>
+  <rect x="0.75" y="0.75" width="1198.5" height="418.5" rx="23.25" fill="none" stroke="#D8D2C5" stroke-width="1.5"/>
+
+  <!-- Subtle Structural Tree Keylines -->
+  <path d="M 710 96 L 724 96" stroke="#0F6E8C" stroke-width="2.5"/>
+  <polygon points="724,96 716,91 716,101" fill="#0F6E8C"/>
+
+  <!-- Left Column: Title Block & Value Proposition -->
+  <g id="title-block" transform="translate(44 0)">
+    <!-- Eyebrow Pill -->
+    <rect x="0" y="34" width="356" height="32" rx="16" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+    <circle cx="18" cy="50" r="5" fill="#0F6E8C"/>
+    <text x="32" y="55" fill="#0F6E8C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">VS CODE · CURSOR · VSCODIUM</text>
+
+    <!-- Main Display Title -->
+    <text x="0" y="114" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="42" font-weight="800" letter-spacing="-1">Selection Markdown</text>
+    <text x="0" y="164" fill="#0F6E8C" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="42" font-weight="800" letter-spacing="-1">Exporter</text>
+
+    <!-- Plain-Language Promise -->
+    <text x="0" y="212" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="500">Curate files and folders in the Explorer into</text>
+    <text x="0" y="240" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="500">one token-counted, secret-redacted Markdown</text>
+    <text x="0" y="268" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="400">document — on your clipboard or in a file.</text>
+
+    <!-- Mechanism Pills (2x2 Grid) -->
+    <g id="feature-pills" transform="translate(0 296)">
+      <!-- Pill 1 -->
+      <rect x="0" y="0" width="204" height="40" rx="10" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+      <circle cx="18" cy="20" r="5" fill="#0F6E8C"/>
+      <text x="32" y="26" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="600">Copy or File</text>
+
+      <!-- Pill 2 -->
+      <rect x="214" y="0" width="212" height="40" rx="10" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+      <circle cx="232" cy="20" r="5" fill="#1B7A43"/>
+      <text x="246" y="26" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="600">~o200k_base</text>
+
+      <!-- Pill 3 -->
+      <rect x="0" y="50" width="204" height="40" rx="10" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+      <circle cx="18" cy="70" r="5" fill="#C53030"/>
+      <text x="32" y="76" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="600">Secret Redaction</text>
+
+      <!-- Pill 4 -->
+      <rect x="214" y="50" width="212" height="40" rx="10" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+      <circle cx="232" cy="70" r="5" fill="#B45309"/>
+      <text x="246" y="76" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="600">Ignore + Stubs</text>
+    </g>
+  </g>
+
+  <!-- Center Column Top: VS Code Explorer Selection Mini-Card -->
+  <g id="explorer-selection" transform="translate(490 28)">
+    <rect width="220" height="142" rx="14" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+    <rect x="1" y="1" width="218" height="32" rx="13" fill="#EFECE4"/>
+    <text x="14" y="23" fill="#545D6A" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">1. SELECTION</text>
+
+    <!-- Selected Explorer Rows -->
+    <rect x="10" y="40" width="200" height="24" rx="5" fill="#E3F2F7"/>
+    <text x="18" y="57" fill="#0F6E8C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">├── .env</text>
+
+    <rect x="10" y="68" width="200" height="24" rx="5" fill="#E3F2F7"/>
+    <text x="18" y="85" fill="#0F6E8C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">├── assets/logo.png</text>
+
+    <rect x="10" y="96" width="200" height="24" rx="5" fill="#E3F2F7"/>
+    <text x="18" y="113" fill="#0F6E8C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">└── src/index.ts</text>
+  </g>
+
+  <!-- Center Column Bottom: Reserved Hybrid Cutout Subject Slot -->
+  <g id="hero-subject-slot" transform="translate(485 174)">
+    <circle cx="115" cy="120" r="115" fill="url(#subject-glow)"/>
+    <ellipse cx="115" cy="222" rx="88" ry="14" fill="#8C8270" fill-opacity="0.28"/>
+    <!-- Transparent raster cutout (hero-subject.png) composites here at (485, 174) size 230x236 -->
+  </g>
+
+  <!-- Right Column: Compiled Markdown Export Specimen -->
+  <g id="project-proof" transform="translate(724 28)">
+    <rect width="436" height="364" rx="16" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+
+    <!-- Document Header Bar -->
+    <rect x="1" y="1" width="434" height="38" rx="15" fill="#EFECE4"/>
+    <circle cx="20" cy="20" r="5.5" fill="#C53030"/>
+    <circle cx="38" cy="20" r="5.5" fill="#B45309"/>
+    <circle cx="56" cy="20" r="5.5" fill="#1B7A43"/>
+    <text x="76" y="26" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">2. EXPORT · FULL_CODE.md</text>
+
+    <!-- Markdown Heading -->
+    <text x="20" y="68" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="22" font-weight="800"># Project Code Export</text>
+
+    <!-- File Tree Section -->
+    <text x="20" y="96" fill="#545D6A" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">## File tree</text>
+    <rect x="18" y="106" width="400" height="86" rx="8" fill="#F6F3EC" stroke="#D8D2C5" stroke-width="1"/>
+    <text x="30" y="129" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17">├── .env</text>
+    <text x="225" y="129" fill="#1B7A43" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="600">(~18 tokens)</text>
+
+    <text x="30" y="155" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17">├── logo.png</text>
+    <text x="225" y="155" fill="#B45309" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="600">(omitted: binary)</text>
+
+    <text x="30" y="181" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17">└── src/index.ts</text>
+    <text x="225" y="181" fill="#1B7A43" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="600">(~42 tokens)</text>
+
+    <!-- Redacted .env Section -->
+    <text x="20" y="218" fill="#545D6A" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">## .env</text>
+    <rect x="18" y="226" width="400" height="36" rx="8" fill="#F6F3EC" stroke="#D8D2C5" stroke-width="1"/>
+    <text x="30" y="250" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17">KEY=</text>
+    <text x="72" y="250" fill="#C53030" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">[REDACTED: OpenAI API key]</text>
+
+    <!-- Stub Section -->
+    <text x="20" y="288" fill="#545D6A" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">## assets/logo.png</text>
+    <rect x="18" y="296" width="4" height="24" rx="2" fill="#B45309"/>
+    <text x="32" y="314" fill="#B45309" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="600">Content omitted — this file is binary.</text>
+
+    <!-- Notification Status Bar -->
+    <rect x="14" y="326" width="408" height="28" rx="7" fill="#E6F4EC" stroke="#1B7A43" stroke-width="1"/>
+    <text x="26" y="346" fill="#1B7A43" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">✓ Copied · ~1,240 tokens · 1 redaction</text>
+  </g>
+</svg>

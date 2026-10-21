@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="360" viewBox="0 0 1200 360"
+     role="img" aria-labelledby="title desc">
+  <title id="title">Core Export Pipeline: Selection to Expansion to Export to Destination</title>
+  <desc id="desc">Four-stage architecture of Selection Markdown Exporter: 1. Selection in VS Code Explorer, 2. Expansion with exclusion and stub classification, 3. Two-pass streaming Export with secret redaction and o200k_base token counting, and 4. Delivery to Clipboard or timestamped file.</desc>
+
+  <!-- Outer Canvas -->
+  <rect width="1200" height="360" rx="22" fill="#F6F3EC"/>
+  <rect x="0.75" y="0.75" width="1198.5" height="358.5" rx="21.25" fill="none" stroke="#D8D2C5" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="40" y="48" fill="#0F6E8C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">CORE PIPELINE · ADR-0001 (VSCODE-INDEPENDENT CORE)</text>
+  <text x="40" y="82" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="30" font-weight="800">From Explorer Selection to Delivered Markdown</text>
+
+  <!-- Stage Connectors -->
+  <path d="M 298 216 L 322 216" stroke="#0F6E8C" stroke-width="2.5"/>
+  <polygon points="322,216 314,211 314,221" fill="#0F6E8C"/>
+
+  <path d="M 590 216 L 614 216" stroke="#0F6E8C" stroke-width="2.5"/>
+  <polygon points="614,216 606,211 606,221" fill="#0F6E8C"/>
+
+  <path d="M 882 216 L 906 216" stroke="#0F6E8C" stroke-width="2.5"/>
+  <polygon points="906,216 898,211 898,221" fill="#0F6E8C"/>
+
+  <!-- STAGE 1: SELECTION -->
+  <g id="stage-selection" transform="translate(36 106)">
+    <rect width="262" height="222" rx="14" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+    <rect x="1" y="1" width="260" height="40" rx="13" fill="#EFECE4"/>
+    <text x="18" y="27" fill="#0F6E8C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700">1. SELECTION</text>
+
+    <text x="18" y="68" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">What you picked</text>
+    <text x="18" y="96" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">Files, folders, or mixed</text>
+    <text x="18" y="120" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">items in Explorer.</text>
+
+    <rect x="16" y="138" width="230" height="68" rx="8" fill="#F6F3EC" stroke="#D8D2C5" stroke-width="1"/>
+    <text x="24" y="164" fill="#1B7A43" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">✓ Explicit file picks</text>
+    <text x="28" y="190" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">override ignore rules</text>
+  </g>
+
+  <!-- STAGE 2: EXPANSION -->
+  <g id="stage-expansion" transform="translate(324 106)">
+    <rect width="266" height="222" rx="14" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+    <rect x="1" y="1" width="264" height="40" rx="13" fill="#EFECE4"/>
+    <text x="18" y="27" fill="#B45309" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700">2. EXPANSION</text>
+
+    <text x="18" y="68" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">Walk &amp; classify</text>
+    <text x="18" y="96" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">Applies 3-tier exclusions;</text>
+    <text x="18" y="120" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">classifies remaining paths:</text>
+
+    <rect x="16" y="138" width="234" height="68" rx="8" fill="#F6F3EC" stroke="#D8D2C5" stroke-width="1"/>
+    <text x="28" y="164" fill="#1B7A43" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">• Embed</text>
+    <text x="112" y="164" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">(text source)</text>
+    <text x="28" y="190" fill="#B45309" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">• Stub</text>
+    <text x="112" y="190" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">(binary / &gt;1MB)</text>
+  </g>
+
+  <!-- STAGE 3: EXPORT -->
+  <g id="stage-export" transform="translate(616 106)">
+    <rect width="266" height="222" rx="14" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+    <rect x="1" y="1" width="264" height="40" rx="13" fill="#EFECE4"/>
+    <text x="18" y="27" fill="#C53030" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700">3. EXPORT</text>
+
+    <text x="18" y="68" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">Redact, count, stream</text>
+    <text x="18" y="96" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">Masks secrets first, then</text>
+    <text x="18" y="120" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18">measures fences &amp; tokens.</text>
+
+    <rect x="16" y="138" width="234" height="68" rx="8" fill="#F6F3EC" stroke="#D8D2C5" stroke-width="1"/>
+    <text x="28" y="164" fill="#C53030" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">[REDACTED: ...]</text>
+    <text x="28" y="190" fill="#1B7A43" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">~o200k_base</text>
+    <text x="150" y="190" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">per file</text>
+  </g>
+
+  <!-- STAGE 4: DESTINATION -->
+  <g id="stage-destination" transform="translate(908 106)">
+    <rect width="256" height="222" rx="14" fill="#FFFFFF" stroke="#D8D2C5" stroke-width="1.5"/>
+    <rect x="1" y="1" width="254" height="40" rx="13" fill="#EFECE4"/>
+    <text x="18" y="27" fill="#1B7A43" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700">4. DESTINATION</text>
+
+    <text x="18" y="68" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700">One document, 2 sinks</text>
+    <text x="18" y="96" fill="#0F6E8C" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="700">• Copy as Markdown</text>
+    <text x="18" y="120" fill="#141920" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="600">• Export to Markdown</text>
+
+    <rect x="16" y="138" width="224" height="68" rx="8" fill="#F6F3EC" stroke="#D8D2C5" stroke-width="1"/>
+    <text x="28" y="164" fill="#141920" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="600">FULL_CODE_YYYY-MM-DD</text>
+    <text x="28" y="190" fill="#545D6A" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="17">+ Toast with ~tokens</text>
+  </g>
+</svg>
